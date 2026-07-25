@@ -8,7 +8,7 @@ CONTRACT.md is frozen: if a model here disagrees with it, the model is wrong.
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Severity = Literal["critical", "high", "medium", "low", "info"]
 Band = Literal["low", "medium", "high", "critical"]
@@ -105,7 +105,7 @@ class AttackEdge(BaseModel):
     from_: str = Field(alias="from")
     to: str
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class AttackPath(BaseModel):

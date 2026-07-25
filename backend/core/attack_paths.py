@@ -310,7 +310,7 @@ def _determine_likelihood(findings: List[Finding]) -> Likelihood:
     has_critical = any(f.severity == "critical" for f in findings)
     has_secret = any(f.category == "secret" for f in findings)
     has_exposed = any(
-        any(kw in f.file_path.lower() for kw in _EXPOSURE_PATH_KEYWORDS)
+        any(kw in f.file_path.lower() for kw in _EXPOSED_PATH_KEYWORDS)
         for f in findings
     )
 
