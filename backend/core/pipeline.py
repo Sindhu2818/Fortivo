@@ -1,31 +1,32 @@
-"""Orchestrate one scan end to end. The only place stage order is defined.
+"""Orchestrate multi-agent scan pipeline end to end.
 
-Responsibility
---------------
-    clone -> trivy + semgrep -> normalize -> reduce -> score -> attack_paths
-          -> llm -> assemble ScanResult -> storage.save
-
-Owns timing (``duration_seconds``), ``stats`` assembly, ``status`` transitions, and
-collecting non-fatal failures into ``errors``. Every stage is skippable: a failed
-scanner or a failed LLM call degrades the document, it does not fail the scan.
-
-Definition of done
-------------------
-``run_scan("./demo-app")`` writes results/<scan_id>.json that validates against
-models.ScanResult with a non-zero score and at least one attack path.
+Multi-Agent Execution Pipeline
+------------------------------
+    Agent 1 (Security Scanner Agent: clone + trivy + semgrep)
+          │ Raw scanner outputs
+          ▼
+    Agent 2 (Risk Analysis Agent: normalize + reduce + score + attack_paths)
+          │ Deterministic Findings, Risk Scores, Attack Paths
+          ▼
+    Agent 3 (Security Expert Agent: Gemini)
+          │ Developer technical explanations, remediation, technical notes
+          ▼
+    Agent 4 (Security Advisor Agent: Grok)
+          │ Executive summary, key risks, recommendations
+          ▼
+    Storage (storage.save)
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+from typing import List
 
 import storage
-from core.attack_paths import generate_attack_paths
 from core.llm import enrich_with_llm
-from core.reduce import reduce_findings
-from core.score import score_findings
+from core.risk_agent import run_risk_agent
 from models import (
     Finding,
     Risk,
@@ -34,14 +35,14 @@ from models import (
     SeverityCounts,
     Stats,
 )
-from scanners.clone import CloneError, derive_repo_name, prepare_repo
-from scanners.normalize import normalize_findings
-from scanners.semgrep import SemgrepError, run_semgrep
-from scanners.trivy import TrivyError, run_trivy
+from scanners.clone import CloneError, derive_repo_name
+from scanners.scanner_agent import run_scanner_agent
+
+logger = logging.getLogger(__name__)
 
 
 def run_scan(repo_url: str) -> ScanResult:
-    """Orchestrate a complete repository scan end-to-end and persist the result.
+    """Orchestrate a complete repository scan using the 4-agent architecture.
 
     Args:
         repo_url: Git repository URL or local filesystem path.
@@ -54,10 +55,14 @@ def run_scan(repo_url: str) -> ScanResult:
     scanned_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     errors: List[str] = []
 
-    # 1. Clone / Access Local Path
+    logger.info("Starting Fortivo Multi-Agent Scan [ID: %s] for %s", scan_id, repo_url)
+
+    # --- Agent 1: Security Scanner Agent ---
     try:
-        clone_result = prepare_repo(repo_url)
+        scanner_res = run_scanner_agent(repo_url)
+        errors.extend(scanner_res.errors)
     except CloneError as clone_err:
+        logger.error("Agent 1 failed (CloneError): %s", clone_err)
         return _handle_fatal_clone_failure(
             scan_id=scan_id,
             repo_url=repo_url,
@@ -66,45 +71,37 @@ def run_scan(repo_url: str) -> ScanResult:
             error_message=str(clone_err),
         )
 
-    with clone_result:
-        repo_name = clone_result.repo_name
-        scan_path = clone_result.scan_path
+    with scanner_res.clone_result:
+        repo_name = scanner_res.repo_name
+        scan_path = scanner_res.scan_path
 
-        # 2. Run Scanners (Non-fatal failures captured in errors)
-        trivy_report, semgrep_report = _run_scanners(scan_path, errors)
+        # --- Agent 2: Risk Analysis Agent (Deterministic) ---
+        risk_res = run_risk_agent(
+            trivy_report=scanner_res.trivy_report,
+            semgrep_report=scanner_res.semgrep_report,
+            repo_root=scan_path,
+        )
 
-        # 3. Normalize scanner outputs to Finding models
-        raw_findings = normalize_findings(trivy_report, semgrep_report, scan_path)
-        raw_count = len(raw_findings)
+        # --- Agent 3 & Agent 4: LLM Coordinator (Gemini Expert & Grok Advisor) ---
+        llm_res = enrich_with_llm(
+            findings=risk_res.findings,
+            attack_paths=risk_res.attack_paths,
+            risk=risk_res.risk,
+        )
 
-        # 4. Reduce (Deduplicate & Rank top 30)
-        reduce_res = reduce_findings(raw_findings)
-        deduped_findings = reduce_res.findings
-        after_dedup_count = reduce_res.after_dedup
-
-        # 5. Score (Compute Risk components & per-finding contribution)
-        score_res = score_findings(deduped_findings)
-        scored_findings = score_res.findings
-        risk = score_res.risk
-
-        # 6. Attack Paths Generation
-        attack_paths = generate_attack_paths(scored_findings)
-
-        # 7. LLM Prose Enrichment (Non-fatal failures captured in errors)
-        llm_res = enrich_with_llm(scored_findings, attack_paths, risk)
         final_findings = llm_res.findings
         final_paths = llm_res.attack_paths
         final_risk = llm_res.risk
         errors.extend(llm_res.errors)
 
-        # 8. Assemble Stats
+        # --- Assemble Stats ---
         stats = _assemble_stats(
-            raw_findings_count=raw_count,
-            after_dedup_count=after_dedup_count,
+            raw_findings_count=risk_res.raw_findings_count,
+            after_dedup_count=risk_res.after_dedup_count,
             reported_findings=final_findings,
         )
 
-        # 9. Compute Duration & Final ScanResult
+        # --- Compute Duration & Construct ScanResult ---
         duration_seconds = round(time.perf_counter() - start_time, 2)
 
         scan_result = ScanResult(
@@ -121,35 +118,22 @@ def run_scan(repo_url: str) -> ScanResult:
             errors=errors,
         )
 
-        # 10. Persist to Disk
+        # --- Persist Document ---
         storage.save(scan_result)
+        logger.info(
+            "Scan %s complete in %.2fs. Risk Score: %d (%s)",
+            scan_id,
+            duration_seconds,
+            final_risk.score,
+            final_risk.band,
+        )
 
         return scan_result
 
 
 # ---------------------------------------------------------------------------
-# Helper Functions
+# Internal Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run_scanners(
-    scan_path: str,
-    errors: List[str],
-) -> Tuple[Dict[str, Any] | None, Dict[str, Any] | None]:
-    """Execute Trivy and Semgrep scanners, capturing non-fatal errors."""
-    trivy_report: Dict[str, Any] | None = None
-    try:
-        trivy_report = run_trivy(scan_path)
-    except TrivyError as trivy_err:
-        errors.append(str(trivy_err))
-
-    semgrep_report: Dict[str, Any] | None = None
-    try:
-        semgrep_report = run_semgrep(scan_path)
-    except SemgrepError as semgrep_err:
-        errors.append(str(semgrep_err))
-
-    return trivy_report, semgrep_report
 
 
 def _assemble_stats(
@@ -157,15 +141,14 @@ def _assemble_stats(
     after_dedup_count: int,
     reported_findings: List[Finding],
 ) -> Stats:
-    """Assemble Stats model based on raw counts and final reported findings."""
-    severity_counts: Dict[str, int] = {
+    severity_counts: dict[str, int] = {
         "critical": 0,
         "high": 0,
         "medium": 0,
         "low": 0,
         "info": 0,
     }
-    source_counts: Dict[str, int] = {}
+    source_counts: dict[str, int] = {}
 
     for finding in reported_findings:
         if finding.severity in severity_counts:
@@ -188,7 +171,6 @@ def _handle_fatal_clone_failure(
     start_time: float,
     error_message: str,
 ) -> ScanResult:
-    """Handle fatal repository cloning/access failure by returning a failed ScanResult."""
     duration_seconds = round(time.perf_counter() - start_time, 2)
 
     try:
@@ -210,6 +192,7 @@ def _handle_fatal_clone_failure(
                 severity=0, exploitability=0, exposure=0, blast_radius=0
             ),
             summary="Repository acquisition failed.",
+            executive_summary="Repository acquisition failed.",
         ),
         stats=Stats(
             raw_findings=0,
@@ -225,4 +208,3 @@ def _handle_fatal_clone_failure(
 
     storage.save(failed_result)
     return failed_result
-

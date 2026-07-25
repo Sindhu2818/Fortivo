@@ -41,6 +41,9 @@ class Risk(BaseModel):
     band: Band
     components: RiskComponents
     summary: str
+    executive_summary: Optional[str] = None
+    key_risks: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
 
 
 class SeverityCounts(BaseModel):
@@ -92,6 +95,8 @@ class Finding(BaseModel):
     duplicate_of: Optional[str] = None
     score_contribution: float = 0.0
     explanation: Optional[Explanation] = None
+    remediation: Optional[str] = None
+    technical_notes: Optional[str] = None
 
 
 class AttackStep(BaseModel):
