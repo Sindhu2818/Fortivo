@@ -13,9 +13,10 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
+import { FindingDrawer } from '@/components/FindingDrawer'
 import { FindingsTable } from '@/components/FindingsTable'
 import { ProgressStages } from '@/components/ProgressStages'
 import { ReductionStat } from '@/components/ReductionStat'
@@ -36,7 +37,7 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showResult, setShowResult] = useState(false)
-  // Selected row. The drawer that consumes it lands in B4.
+  // Selected row; FindingDrawer consumes it.
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -84,6 +85,14 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
 
   const stage = progress?.stage ?? 'cloning'
   const counts = progress?.counts ?? INITIAL_COUNTS
+
+  // The table hands back an id, not a finding, so resolve it here. Falls back to
+  // null for an id that no longer resolves, which closes the drawer rather than
+  // rendering an empty one.
+  const selectedFinding = useMemo(
+    () => result?.findings.find((f) => f.id === selectedId) ?? null,
+    [result, selectedId]
+  )
 
   if (error) {
     return (
@@ -143,6 +152,12 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
             selectedId={selectedId}
           />
         </div>
+
+        <FindingDrawer
+          finding={selectedFinding}
+          risk={result.risk}
+          onOpenChange={(open) => !open && setSelectedId(null)}
+        />
       </div>
     )
   }

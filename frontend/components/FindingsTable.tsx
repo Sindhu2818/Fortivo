@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 interface FindingsTableProps {
   findings: Finding[]
   onSelect: (findingId: string) => void
-  /** Highlights the open row. Wired up properly when the drawer lands in B4. */
+  /** Highlights the row whose finding is open in FindingDrawer. */
   selectedId?: string | null
 }
 

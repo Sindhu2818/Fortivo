@@ -25,8 +25,8 @@ For the at-a-glance view, see `STATUS.md`.
 | 9 | Frontend scaffold + DEMO_MODE | C | done | frontend runs without backend |
 | 10 | Scan page | C | done | submit navigates to dashboard |
 | 11 | Dashboard | C | done | dashboard renders findings |
-| 12 | Finding drawer | C | todo | drawer opens correctly |
-| 13 | Attack graph | C | todo | graph renders |
+| 12 | Finding drawer | C | done | drawer opens correctly |
+| 13 | Attack graph | C | done | graph renders |
 | 14 | Polish | C | todo | responsive, no console errors |
 | 15 | Integration | C+S | todo | frontend works with live backend |
 | 16 | Golden run | S | todo | `results/golden.json` exists |

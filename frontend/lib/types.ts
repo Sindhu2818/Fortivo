@@ -81,16 +81,30 @@ export interface Finding {
   explanation: Explanation | null
 }
 
+/**
+ * `kind` and `AttackEdge.label` below are NOT in CONTRACT.md. They are present on
+ * every step and edge in fixtures/mock_results.json, so the backend is already
+ * emitting them, but the frozen contract does not promise them. They are typed
+ * optional and every consumer must degrade without them: AttackPathGraph derives
+ * `kind` from the edge topology when it is absent and simply omits an unlabelled
+ * edge's caption. Contract-only documents therefore still render correctly.
+ * Flagged for Sindhu in STATUS.md — the contract is frozen, so we do not add them
+ * to it ourselves.
+ */
+export type StepKind = 'entry' | 'pivot' | 'impact'
+
 export interface AttackStep {
   order: number
   finding_id: string
   label: string
   technique: string
+  kind?: StepKind
 }
 
 export interface AttackEdge {
   from: string
   to: string
+  label?: string
 }
 
 export interface AttackPath {

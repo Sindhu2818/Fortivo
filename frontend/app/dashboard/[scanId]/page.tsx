@@ -2,7 +2,7 @@
  * Dashboard (/dashboard/[scanId]): the main demo screen.
  *
  * Responsibility: load one ScanResult via lib/api, then compose RiskScore,
- * ScoreBreakdown, StatsBar, AttackGraph, FindingsTable and FindingDrawer.
+ * ScoreBreakdown, StatsBar, AttackPathGraph, FindingsTable and FindingDrawer.
  * Owns the selected-finding state that the table and graph both drive and the
  * drawer consumes. No fetching logic of its own beyond the one call.
  *
@@ -18,7 +18,7 @@ import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import { RiskScore } from '@/components/RiskScore'
 import { ScoreBreakdown } from '@/components/ScoreBreakdown'
 import { StatsBar } from '@/components/StatsBar'
-import { AttackGraph } from '@/components/AttackGraph'
+import { AttackPathGraph } from '@/components/AttackPathGraph'
 import { FindingsTable } from '@/components/FindingsTable'
 import { FindingDrawer } from '@/components/FindingDrawer'
 import { EmptyState } from '@/components/EmptyState'
@@ -113,7 +113,7 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
           <RiskScore risk={result.risk} />
         </div>
         <div className="lg:col-span-2">
-          <ScoreBreakdown components={result.risk.components} />
+          <ScoreBreakdown components={result.risk.components} score={result.risk.score} />
         </div>
       </div>
 
@@ -121,9 +121,10 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
         <StatsBar stats={result.stats} />
       </div>
 
-      <div className="mt-10">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Attack paths</h2>
-        <AttackGraph
+      {/* Renders nothing at all when attack_paths is empty — heading included —
+          so the dashboard never shows an empty canvas. */}
+      <div className="mt-10 empty:mt-0">
+        <AttackPathGraph
           attackPaths={result.attack_paths}
           findingsById={findingsById}
           onSelect={setSelectedId}
@@ -138,7 +139,11 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
         <FindingsTable findings={result.findings} onSelect={setSelectedId} />
       </div>
 
-      <FindingDrawer finding={selectedFinding} onOpenChange={(open) => !open && setSelectedId(null)} />
+      <FindingDrawer
+        finding={selectedFinding}
+        risk={result.risk}
+        onOpenChange={(open) => !open && setSelectedId(null)}
+      />
     </div>
   )
 }

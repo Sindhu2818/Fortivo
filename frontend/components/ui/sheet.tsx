@@ -7,6 +7,9 @@ import { cn } from '@/lib/utils'
 
 export const Sheet = Dialog.Root
 export const SheetTrigger = Dialog.Trigger
+/** Radix warns if Content has no Title — every sheet must label itself. */
+export const SheetTitle = Dialog.Title
+export const SheetDescription = Dialog.Description
 
 export function SheetContent({
   className,
