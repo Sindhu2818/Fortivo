@@ -22,6 +22,8 @@ returns a scan_id whose document later loads from GET /results/{scan_id}.
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import sys
 from typing import Dict, List
 
@@ -30,12 +32,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import storage
 from core.pipeline import run_scan
+from error_handlers import register_exception_handlers
 from models import (
     ScanAccepted,
     ScanRequest,
     ScanResult,
     ScanSummary,
 )
+from utils.validators import validate_repo_input
+
+# ---------------------------------------------------------------------------
+# Logging Configuration
+# ---------------------------------------------------------------------------
+
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # FastAPI Application Initialization & CORS Configuration
@@ -47,7 +62,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Enable CORS for local frontend development (localhost:3000)
+register_exception_handlers(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -60,7 +76,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ---------------------------------------------------------------------------
 # HTTP Route Handlers
 # ---------------------------------------------------------------------------
@@ -68,7 +83,7 @@ app.add_middleware(
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check() -> Dict[str, bool]:
-    """Health check endpoint to verify backend service status."""
+    """Health check endpoint."""
     return {"ok": True}
 
 
@@ -78,15 +93,10 @@ def health_check() -> Dict[str, bool]:
     status_code=status.HTTP_202_ACCEPTED,
 )
 def create_scan(request: ScanRequest) -> ScanAccepted:
-    """Initiate a repository scan and return a ScanAccepted response.
+    """Run a repository scan."""
 
-    Args:
-        request: ScanRequest body containing repo_url.
-
-    Returns:
-        ScanAccepted containing scan_id and final scan status.
-    """
     repo_url = request.repo_url.strip()
+
     if not repo_url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -94,18 +104,28 @@ def create_scan(request: ScanRequest) -> ScanAccepted:
         )
 
     try:
-        result = run_scan(repo_url)
-        return ScanAccepted(scan_id=result.scan_id, status=result.status)
-    except Exception as exc:
+        validate_repo_input(repo_url)
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to execute scan: {exc}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         ) from exc
 
+    result = run_scan(repo_url)
 
-@app.get("/results", response_model=List[ScanSummary], status_code=status.HTTP_200_OK)
+    return ScanAccepted(
+        scan_id=result.scan_id,
+        status=result.status,
+    )
+
+
+@app.get(
+    "/results",
+    response_model=List[ScanSummary],
+    status_code=status.HTTP_200_OK,
+)
 def get_scan_summaries() -> List[ScanSummary]:
-    """List summary records for all completed scans, newest first."""
+    """Return all scan summaries."""
     return storage.list_summaries()
 
 
@@ -115,26 +135,8 @@ def get_scan_summaries() -> List[ScanSummary]:
     status_code=status.HTTP_200_OK,
 )
 def get_scan_result(scan_id: str) -> ScanResult:
-    """Retrieve full ScanResult document for a specific scan ID.
-
-    Args:
-        scan_id: Scan ID string (e.g. scan_20260725_142301).
-
-    Returns:
-        Full ScanResult object matching CONTRACT.md.
-    """
-    try:
-        return storage.load(scan_id)
-    except FileNotFoundError as err:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Scan result not found: {scan_id}",
-        ) from err
-    except ValueError as val_err:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Corrupted scan document: {val_err}",
-        ) from val_err
+    """Return a full scan result."""
+    return storage.load(scan_id)
 
 
 # ---------------------------------------------------------------------------
@@ -144,41 +146,70 @@ def get_scan_result(scan_id: str) -> ScanResult:
 
 def _cli_main() -> None:
     """CLI entry point for running scans directly from the terminal."""
+
     parser = argparse.ArgumentParser(
         description="Fortivo Security Scanner CLI — Scan code repos and compute risk."
     )
+
     parser.add_argument(
         "repo_url",
-        help="Repository URL (e.g. https://github.com/example/repo) or local path (e.g. ./demo-app)",
+        help="Repository URL (e.g. https://github.com/example/repo) "
+        "or local path (e.g. ./demo-app)",
     )
+
     args = parser.parse_args()
 
     repo_url = args.repo_url.strip()
+
     if not repo_url:
-        print("Error: repo_url argument cannot be empty.", file=sys.stderr)
+        logger.error("repo_url argument cannot be empty.")
         sys.exit(1)
 
-    print(f"[*] Starting Fortivo scan for: {repo_url}")
+    try:
+        validate_repo_input(repo_url)
+    except ValueError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
+
+    logger.info("Starting Fortivo scan for: %s", repo_url)
+
     try:
         result = run_scan(repo_url)
-        print(f"[+] Scan finished: {result.scan_id}")
-        print(f"    Status:      {result.status}")
-        print(f"    Risk Score:  {result.risk.score}/100 ({result.risk.band})")
-        print(f"    Findings:    {result.stats.reported_findings} reported")
-        print(f"    Duration:    {result.duration_seconds}s")
+
+        logger.info("Scan finished: %s", result.scan_id)
+        logger.info("Status: %s", result.status)
+        logger.info(
+            "Risk Score: %s/100 (%s)",
+            result.risk.score,
+            result.risk.band,
+        )
+        logger.info(
+            "Findings: %s reported",
+            result.stats.reported_findings,
+        )
+        logger.info(
+            "Duration: %.2fs",
+            result.duration_seconds,
+        )
+
         if result.errors:
-            print(f"    Warnings/Errors ({len(result.errors)}):")
+            logger.warning(
+                "Warnings/Errors (%d)",
+                len(result.errors),
+            )
+
             for err in result.errors:
-                print(f"      - {err}")
+                logger.warning("%s", err)
 
         if result.status == "failed":
             sys.exit(1)
+
         sys.exit(0)
-    except Exception as exc:
-        print(f"[-] Scan execution failed: {exc}", file=sys.stderr)
+
+    except Exception:
+        logger.exception("Scan execution failed")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     _cli_main()
-

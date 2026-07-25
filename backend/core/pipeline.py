@@ -82,17 +82,28 @@ def run_scan(repo_url: str) -> ScanResult:
             repo_root=scan_path,
         )
 
-        # --- Agent 3 & Agent 4: LLM Coordinator (Gemini Expert & Grok Advisor) ---
-        llm_res = enrich_with_llm(
-            findings=risk_res.findings,
-            attack_paths=risk_res.attack_paths,
-            risk=risk_res.risk,
-        )
+                # --- Agent 3 & Agent 4: LLM Coordinator (Gemini Expert & Grok Advisor) ---
+        try:
+            llm_res = enrich_with_llm(
+                findings=risk_res.findings,
+                attack_paths=risk_res.attack_paths,
+                risk=risk_res.risk,
+            )
 
-        final_findings = llm_res.findings
-        final_paths = llm_res.attack_paths
-        final_risk = llm_res.risk
-        errors.extend(llm_res.errors)
+            final_findings = llm_res.findings
+            final_paths = llm_res.attack_paths
+            final_risk = llm_res.risk
+            errors.extend(llm_res.errors)
+
+        except Exception as exc:
+            logger.exception("LLM enrichment failed")
+
+            errors.append(f"AI enrichment unavailable: {exc}")
+
+            # Fall back to deterministic results from the Risk Agent
+            final_findings = risk_res.findings
+            final_paths = risk_res.attack_paths
+            final_risk = risk_res.risk
 
         # --- Assemble Stats ---
         stats = _assemble_stats(

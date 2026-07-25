@@ -40,27 +40,48 @@ def enrich_with_llm(
     attack_paths: List[AttackPath],
     risk: Risk,
 ) -> LLMResult:
-    """Coordinate Agent 3 (Gemini Security Expert) and Agent 4 (Grok Security Advisor).
+    """Coordinate Agent 3 (Gemini Security Expert) and Agent 4 (Grok Security Advisor)."""
 
-    Args:
-        findings: Ranked Finding models.
-        attack_paths: AttackPath models.
-        risk: Risk model computed by Agent 2.
-
-    Returns:
-        LLMResult containing enriched findings, risk model, and accumulated errors.
-    """
     errors: List[str] = []
 
-    # 1. Execute Agent 3: Security Expert Agent (Gemini)
-    logger.info("Coordinating Agent 3 [Security Expert Agent - Gemini]...")
-    updated_findings, gemini_errors = run_gemini_expert_agent(findings)
-    errors.extend(gemini_errors)
+    updated_findings = findings
+    updated_risk = risk
 
-    # 2. Execute Agent 4: Security Advisor Agent (Grok)
+    # ------------------------------------------------------------------
+    # Agent 3: Gemini Security Expert
+    # ------------------------------------------------------------------
+    logger.info("Coordinating Agent 3 [Security Expert Agent - Gemini]...")
+
+    try:
+        updated_findings, gemini_errors = run_gemini_expert_agent(findings)
+        errors.extend(gemini_errors)
+
+    except Exception as exc:
+        logger.exception("Gemini Expert Agent crashed")
+        errors.append(f"Gemini unavailable: {exc}")
+
+        # Continue using deterministic findings
+        updated_findings = findings
+
+    # ------------------------------------------------------------------
+    # Agent 4: Grok Security Advisor
+    # ------------------------------------------------------------------
     logger.info("Coordinating Agent 4 [Security Advisor Agent - Grok]...")
-    updated_risk, grok_errors = run_grok_advisor_agent(risk, updated_findings, attack_paths)
-    errors.extend(grok_errors)
+
+    try:
+        updated_risk, grok_errors = run_grok_advisor_agent(
+            risk,
+            updated_findings,
+            attack_paths,
+        )
+        errors.extend(grok_errors)
+
+    except Exception as exc:
+        logger.exception("Grok Advisor Agent crashed")
+        errors.append(f"Grok unavailable: {exc}")
+
+        # Continue using deterministic risk score
+        updated_risk = risk
 
     return LLMResult(
         findings=updated_findings,
