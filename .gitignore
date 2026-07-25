@@ -1,10 +1,81 @@
+# ==========================
+# Python
+# ==========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ==========================
+# Environment variables
+# ==========================
+.env
+.env.*
+!.env.example
+
+# ==========================
+# Backend output
+# ==========================
+results/
+logs/
+*.log
+
+# Scanner temporary output
+tmp/
+temp/
+
+# ==========================
+# Node / Next.js
+# ==========================
 node_modules/
 .next/
-*.tsbuildinfo
-__pycache__/
-*.pyc
-.venv/
-.env
-.env.local
-results/*.json
-!results/.gitkeep
+out/
+dist/
+build/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================
+# IDEs
+# ==========================
+.vscode/
+.idea/
+
+# ==========================
+# Operating System
+# ==========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ==========================
+# Git
+# ==========================
+*.orig
+*.rej
+
+# ==========================
+# Miscellaneous
+# ==========================
+*.sqlite3
+*.db
+*.bak
+*.tmp
