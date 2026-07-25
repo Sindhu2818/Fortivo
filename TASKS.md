@@ -23,7 +23,7 @@ For the at-a-glance view, see `STATUS.md`.
 | 7 | LLM reasoning — Gemini structured JSON fills `explanation`, `narrative`, `risk.summary` | S | todo | every finding has non-null explanation |
 | 8 | Pipeline wire-up — scan → normalize → reduce → score → paths → LLM → results | S | in-progress | `/results/<id>` returns a valid document |
 | 9 | Frontend scaffold + DEMO_MODE | C | done | frontend runs without backend |
-| 10 | Scan page | C | todo | submit navigates to dashboard |
+| 10 | Scan page | C | done | submit navigates to dashboard |
 | 11 | Dashboard | C | todo | dashboard renders findings |
 | 12 | Finding drawer | C | todo | drawer opens correctly |
 | 13 | Attack graph | C | todo | graph renders |

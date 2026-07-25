@@ -11,8 +11,8 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 
 | | Sindhu (Windows + WSL — backend) | Charvitha (Fedora — frontend) |
 |---|---|---|
-| **Doing** | Backend verification and integration | Task 10 — Scan page |
-| **Next** | Gemini integration → Golden run | Dashboard |
+| **Doing** | Backend verification and integration | Task 11 — Dashboard |
+| **Next** | Gemini integration → Golden run | Finding drawer |
 | **Blocked on** | nothing | nothing |
 
 Backend architecture has been implemented. Scanner wrappers, normalization,
@@ -64,7 +64,7 @@ The frontend already runs independently in demo mode using
 ### Charvitha — frontend chain
 
 - [x] **9. Scaffold + DEMO_MODE**
-- [ ] **10. Scan page**
+- [x] **10. Scan page** — landing + `/scan/[id]` progress with the funnel counter
 - [ ] **11. Dashboard**
 - [ ] **12. Finding drawer**
 - [ ] **13. Attack graph**

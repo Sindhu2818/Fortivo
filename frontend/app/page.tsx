@@ -1,15 +1,18 @@
 /**
- * Landing page (/): product one-liner, a link into /scan, and a list of past
- * scans from GET /results.
+ * Landing page (/): the product name, the one-liner, and the scan box. Below
+ * that, past scans from GET /results.
  *
- * Responsibility: entry point and scan history. No analysis rendering.
+ * Responsibility: entry point only. The input and its submit live in
+ * ScanInput ('use client'); this page stays a server component so the history
+ * list can be fetched during render.
  *
- * DoD: localhost:3000 shows the pitch line and a working link to /scan.
+ * DoD: localhost:3000 shows the pitch and a prefilled input whose Scan button
+ * lands on /scan/<scan_id>.
  */
 
 import Link from 'next/link'
-import { ArrowRight, Clock } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Clock } from 'lucide-react'
+import { ScanInput } from '@/components/ScanInput'
 import { EmptyState } from '@/components/EmptyState'
 import { BAND_STYLES } from '@/lib/severity'
 import { listResults } from '@/lib/api'
@@ -31,30 +34,29 @@ export default async function LandingPage() {
   const scans = await listResults().catch(() => [])
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-16">
+    <div className="mx-auto max-w-6xl px-6 py-20">
       <section className="flex flex-col items-start gap-6">
         <span
           className={`${EYEBROW} rounded-full border border-border px-3 py-1 text-primary`}
         >
           AI Security Engineer
         </span>
-        <h1 className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
-          AI that reasons like a security engineer —{' '}
-          <span className="text-primary">not just a scanner.</span>
+
+        <h1 className="font-mono text-5xl font-semibold tracking-tight text-foreground sm:text-6xl">
+          Fortivo
         </h1>
-        <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
-          Fortivo scans your repository with Trivy and Semgrep, cuts hundreds of raw
-          findings down to the handful that matter, correlates them into attack
-          paths, and explains every one of them in plain English.
+
+        <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
+          Scans your repository with Trivy and Semgrep, then cuts hundreds of raw
+          findings down to the handful that actually matter — and explains every one.
         </p>
-        <Button asChild size="lg">
-          <Link href="/scan">
-            Scan a repository <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
+
+        <div className="mt-2 w-full">
+          <ScanInput />
+        </div>
       </section>
 
-      <section className="mt-16">
+      <section className="mt-20">
         <div className="mb-4 flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground/70" />
           <h2 className={EYEBROW}>Recent scans</h2>
@@ -64,11 +66,6 @@ export default async function LandingPage() {
           <EmptyState
             title="No scans yet"
             description="Run your first scan to see a risk score, ranked findings, and attack paths here."
-            action={
-              <Button asChild variant="outline" size="sm">
-                <Link href="/scan">Run a scan</Link>
-              </Button>
-            }
           />
         ) : (
           <div className="flex flex-col gap-2">
@@ -77,7 +74,7 @@ export default async function LandingPage() {
               return (
                 <Link
                   key={scan.scan_id}
-                  href={`/dashboard/${scan.scan_id}`}
+                  href={`/scan/${scan.scan_id}`}
                   className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-colors hover:bg-muted"
                 >
                   <div className="flex-1">
@@ -91,7 +88,6 @@ export default async function LandingPage() {
                   >
                     {band.label} · {scan.score}
                   </span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground/70" />
                 </Link>
               )
             })}
