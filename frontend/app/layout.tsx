@@ -7,7 +7,7 @@
  * unstyled flash.
  */
 
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Link from 'next/link'
 import { ShieldCheck } from 'lucide-react'
 import './globals.css'
@@ -18,10 +18,16 @@ export const metadata: Metadata = {
     'AI that understands your software, reasons like a security engineer, and fixes vulnerabilities before hackers exploit them.',
 }
 
+/** Dark is the only theme we ship; `.dark` is what Tailwind switches on. */
+export const viewport: Viewport = {
+  colorScheme: 'dark',
+  themeColor: '#030f11',
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body>
+      <body className="font-sans antialiased">
         <div className="flex min-h-dvh flex-col">
           <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
             <div className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-4">

@@ -2,89 +2,104 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: Arial, Helvetica, sans-serif;
+/**
+ * Design tokens. Values come from docs/frontend-refs/design-tokens.md — do not
+ * improvise substitutes here.
+ *
+ * tailwind.config.ts reads every token as hsl(var(--token)), so these are bare
+ * HSL channels: no hsl() wrapper, no hex. Dark is the theme the app ships in;
+ * app/layout.tsx pins `class="dark"` on <html>.
+ */
+@layer base {
+  :root {
+    /* Light — defined for completeness; the app runs in .dark. */
+    --background: 189 70% 96%;
+    --foreground: 193 69% 5%;
+    --primary: 194 72% 52%;
+    --primary-foreground: 189 70% 96%;
+    --secondary: 225 72% 73%;
+    --secondary-foreground: 193 69% 5%;
+    --accent: 281 63% 82%;
+    --accent-foreground: 193 69% 5%;
+
+    /* Surfaces: steps of the background hue, not new colours. */
+    --card: 189 45% 99%;
+    --card-foreground: 193 69% 5%;
+    --popover: 189 45% 99%;
+    --popover-foreground: 193 69% 5%;
+    --muted: 189 35% 91%;
+    --muted-foreground: 193 20% 35%;
+    --border: 189 30% 85%;
+    --input: 189 30% 85%;
+    --ring: 194 72% 52%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 189 70% 4%;
+    --foreground: 193 69% 95%;
+    --primary: 194 78% 52%;
+    --primary-foreground: 189 70% 4%;
+    --secondary: 225 23% 90%;
+    --secondary-foreground: 189 70% 4%;
+    --accent: 282 48% 70%;
+    --accent-foreground: 189 70% 4%;
+
+    --card: 189 45% 7%;
+    --card-foreground: 193 69% 95%;
+    --popover: 189 45% 7%;
+    --popover-foreground: 193 69% 95%;
+    --muted: 189 30% 13%;
+    --muted-foreground: 193 20% 65%;
+    --border: 189 30% 15%;
+    --input: 189 30% 15%;
+    --ring: 194 78% 52%;
+  }
+
+  /**
+   * Severity ramp. Same values in both themes — a critical finding is the same
+   * red either way. Per docs/frontend-refs/collisions.md red / orange / amber /
+   * grey belong to severity and to nothing else in the app; `--destructive` is
+   * an alias of critical so shadcn's destructive variants stay on the ramp
+   * instead of introducing a sixth red.
+   */
+  :root,
+  .dark {
+    --severity-critical: 358 75% 59%;
+    --severity-high: 28 87% 62%;
+    --severity-medium: 46 77% 60%;
+    --severity-low: 202 11% 47%;
+    --severity-info: 204 14% 32%;
+
+    --destructive: 358 75% 59%;
+
+    /* Fonts are still TODO in design-tokens.md — neutral stacks until then. */
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Dark by default: keeps scrollbars and form controls dark too. */
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
-  }
-}
-@layer base {
-  :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.141 0.005 285.823);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.141 0.005 285.823);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.141 0.005 285.823);
-    --primary: oklch(0.21 0.006 285.885);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.967 0.001 286.375);
-    --muted-foreground: oklch(0.552 0.016 285.938);
-    --accent: oklch(0.967 0.001 286.375);
-    --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.92 0.004 286.32);
-    --input: oklch(0.92 0.004 286.32);
-    --ring: oklch(0.705 0.015 286.067);
-    --chart-1: oklch(0.871 0.006 286.286);
-    --chart-2: oklch(0.552 0.016 285.938);
-    --chart-3: oklch(0.442 0.017 285.786);
-    --chart-4: oklch(0.37 0.013 285.805);
-    --chart-5: oklch(0.274 0.006 286.033);
-    --radius: 0.5rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.141 0.005 285.823);
-    --sidebar-primary: oklch(0.21 0.006 285.885);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.967 0.001 286.375);
-    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-    --sidebar-border: oklch(0.92 0.004 286.32);
-    --sidebar-ring: oklch(0.705 0.015 286.067);
-  }
-  .dark {
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.21 0.006 285.885);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.92 0.004 286.32);
-    --primary-foreground: oklch(0.21 0.006 285.885);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.552 0.016 285.938);
-    --chart-1: oklch(0.871 0.006 286.286);
-    --chart-2: oklch(0.552 0.016 285.938);
-    --chart-3: oklch(0.442 0.017 285.786);
-    --chart-4: oklch(0.37 0.013 285.805);
-    --chart-5: oklch(0.274 0.006 286.033);
-    --sidebar: oklch(0.21 0.006 285.885);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.274 0.006 286.033);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.552 0.016 285.938);
-  }
-}
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

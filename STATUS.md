@@ -11,13 +11,14 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 
 | | Sindhu (Windows + WSL — backend) | Charvitha (Fedora — frontend) |
 |---|---|---|
-| **Doing** | — | Task 9 — scaffold landed, DEMO_MODE still to do |
-| **Next** | Task 1 — capture real scanner fixtures | Finish Task 9, then Task 10 |
-| **Blocked on** | nothing | nothing |
+| **Doing** | — | Task 10 — scan page |
+| **Next** | Task 1 — capture real scanner fixtures | Task 10, then Task 11 |
+| **Blocked on** | nothing | nothing (see the status-endpoint note below) |
 
-Backend is untouched — all files are stubs. `frontend/` is now a real Next.js 14
-project (deps installed, `npm run build` compiles) but its 16 source files are still
-docblock-only stubs, so nothing renders yet.
+Backend is untouched — all files are stubs. `frontend/` runs: `npm run dev` boots, the
+design tokens are wired, and with `NEXT_PUBLIC_DEMO_MODE=true` the landing page,
+`/scan` and `/dashboard/<id>` all render off `fixtures/mock_results.json` with no
+backend running.
 
 ---
 
@@ -55,7 +56,7 @@ docblock-only stubs, so nothing renders yet.
 - [ ] **18. DECISIONS.md**
 
 ### Charvitha — frontend chain
-- [ ] **9. Scaffold + DEMO_MODE** — *can start immediately, no backend needed*
+- [x] **9. Scaffold + DEMO_MODE** — `lib/api.ts` is the only file that knows the mode
 - [ ] **10. Scan page**
 - [ ] **11. Dashboard** — risk gauge, breakdown, stats, findings table
 - [ ] **12. Finding drawer**
@@ -74,13 +75,15 @@ docblock-only stubs, so nothing renders yet.
 
 ## The one hard sync point
 
-Charvitha's work is only as good as `fixtures/mock_results.json`. The stub version in
-the repo has **3 findings and 1 attack path** — enough to compile against, not enough
-to reveal layout problems.
+Charvitha's work is only as good as `fixtures/mock_results.json`.
 
-**Sindhu: after Task 1, replace it with a realistic 30-finding, 3-attack-path
-document and tell Charvitha it landed.** Until then Charvitha should build for volume
-she can't yet see: assume 30 rows, long titles, 4-step paths, and `explanation: null`.
+**Status 2026-07-25: the realistic fixture has landed** — as of this session the file
+holds **30 findings and 2 attack paths** (raw 412 → dedupe 180 → 30), and the frontend
+renders all 30 rows off it. It is still uncommitted in the working tree, so **Sindhu:
+commit it.** The frontend reads the funnel numbers straight out of this file rather
+than hardcoding them, so replacing it again costs the frontend nothing.
+
+Still worth building for: long titles, 4-step paths, and `explanation: null`.
 
 Everything else is decoupled. The contract is frozen, so neither side waits on the
 other for shape — only for realism.
@@ -91,7 +94,19 @@ other for shape — only for realism.
 
 *Write it here instead of reaching into the other person's tree.*
 
-- (nothing)
+- **Sindhu → Charvitha: one progress endpoint, needed for Task 15, not before.**
+  CONTRACT.md is frozen and only describes the *result* document, so it says nothing
+  about polling a scan that is still running. The frontend now calls:
+
+  `GET /scan/{scan_id}/status` → `{ "status": ..., "stage": ..., "counts": {...} }`
+
+  where `status` is the CONTRACT.md enum, `stage` is one of `cloning` | `scanning` |
+  `normalizing` | `reducing` | `reasoning` | `complete`, and `counts` is
+  `{ total_raw, after_dedupe, analyzed }` — `after_dedupe` and `analyzed` are `null`
+  until their stage runs. The shape lives in `frontend/lib/types.ts` as `ScanProgress`.
+  **This is a proposal, not a decision** — if the path or field names don't suit the
+  pipeline, say so and the frontend changes, since only `lib/api.ts` touches it.
+  Nothing is blocked meanwhile: DEMO_MODE scripts the whole timeline locally.
 
 **Resolved 2026-07-25 — frontend deps are installed.** The list is frozen in
 `CLAUDE.md`; no further dep-approval turn is needed. Sindhu needs no action.

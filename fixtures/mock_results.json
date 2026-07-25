@@ -6,56 +6,60 @@
   "duration_seconds": 41.7,
   "status": "complete",
   "risk": {
-    "score": 78,
-    "band": "critical",
+    "score": 72,
+    "band": "high",
     "components": {
-      "severity": 82,
-      "exploitability": 71,
-      "exposure": 88,
-      "blast_radius": 64
+      "severity": 85,
+      "exploitability": 73,
+      "exposure": 61,
+      "blast_radius": 51
     },
-    "summary": "An internet-reachable endpoint deserializes untrusted input, and the same service ships a hardcoded database password, so one request chains to full database access."
+    "summary": "A hardcoded AWS credential pair sits in the same service as an unauthenticated server-side request forgery, so credential theft and cloud metadata access reinforce each other. Unsafe YAML loading on an outdated PyYAML gives code execution in the same process, and the container runs that process as root."
   },
   "stats": {
     "raw_findings": 412,
-    "after_dedup": 260,
-    "reported_findings": 3,
+    "after_dedup": 180,
+    "reported_findings": 30,
     "by_severity": {
-      "critical": 2,
-      "high": 1,
-      "medium": 0,
-      "low": 0,
+      "critical": 3,
+      "high": 9,
+      "medium": 12,
+      "low": 6,
       "info": 0
     },
     "by_source": {
-      "trivy": 2,
-      "semgrep": 1
+      "trivy": 11,
+      "semgrep": 19
     }
   },
   "findings": [
     {
       "id": "f_001",
       "rank": 1,
-      "source": "semgrep",
-      "rule_id": "python.lang.security.deserialization.pickle.avoid-pickle",
-      "title": "Untrusted input passed to pickle.loads",
+      "source": "trivy",
+      "rule_id": "aws-access-key-id",
+      "title": "AWS Access Key ID committed in application config",
       "severity": "critical",
       "cvss": null,
-      "category": "code",
-      "file_path": "services/api/handlers.py",
-      "line_start": 47,
-      "line_end": 47,
+      "category": "secret",
+      "file_path": "config.py",
+      "line_start": 21,
+      "line_end": 21,
       "package": null,
-      "code_snippet": "payload = pickle.loads(base64.b64decode(request.data))",
-      "cwe": ["CWE-502"],
-      "references": ["https://cwe.mitre.org/data/definitions/502.html"],
-      "occurrences": 1,
+      "code_snippet": "    AWS_ACCESS_KEY_ID = \"AKIA4TQX7ZP2WLMN3RJD\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/798.html"
+      ],
+      "occurrences": 2,
       "duplicate_of": null,
-      "score_contribution": 18.2,
+      "score_contribution": 9.02,
       "explanation": {
-        "what": "The request body is deserialized with pickle, which executes arbitrary constructors during load.",
-        "why_it_matters": "This handler is mounted on the public API router, so any unauthenticated caller can run code in the container.",
-        "fix": "Replace pickle with json.loads and validate the parsed body against a schema.",
+        "what": "A long-lived AWS access key ID is hardcoded as a class attribute on Config rather than read from the environment. The same value is pulled into a subprocess environment by services/backup.py when archives are uploaded, so it is live credential material and not a placeholder.",
+        "why_it_matters": "Anyone with read access to the repository, a CI log, or the container filesystem holds real AWS credentials for the acme-invoices-prod bucket. Because the key is committed, rotating it requires a history rewrite as well as a new key, and every clone made before the rotation stays valid until the key is disabled in IAM.",
+        "fix": "--- a/config.py\n+++ b/config.py\n@@ -18,7 +18,7 @@ class Config:\n     DATABASE_PATH = os.path.join(BASE_DIR, \"data\", \"app.db\")\n     DATABASE_TIMEOUT = 15\n\n-    AWS_ACCESS_KEY_ID = \"AKIA4TQX7ZP2WLMN3RJD\"\n+    AWS_ACCESS_KEY_ID = os.environ[\"AWS_ACCESS_KEY_ID\"]\n     AWS_SECRET_ACCESS_KEY = \"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\"\n     AWS_DEFAULT_REGION = \"ap-south-1\"\n     S3_BUCKET = \"acme-invoices-prod\"\n",
         "confidence": "high"
       }
     },
@@ -63,25 +67,29 @@
       "id": "f_002",
       "rank": 2,
       "source": "trivy",
-      "rule_id": "generic-db-password",
-      "title": "Hardcoded PostgreSQL password in source",
+      "rule_id": "aws-secret-access-key",
+      "title": "AWS Secret Access Key committed alongside its key ID",
       "severity": "critical",
       "cvss": null,
       "category": "secret",
-      "file_path": "services/api/config.py",
-      "line_start": 12,
-      "line_end": 12,
+      "file_path": "config.py",
+      "line_start": 22,
+      "line_end": 22,
       "package": null,
-      "code_snippet": "DATABASE_URL = \"postgresql://admin:hunter2@db.internal:5432/prod\"",
-      "cwe": ["CWE-798"],
-      "references": [],
-      "occurrences": 4,
+      "code_snippet": "    AWS_SECRET_ACCESS_KEY = \"hK3nQ8vZs1RmYd7Tp0LxWc5EbA2JgU9FoiN4XvQz\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/798.html"
+      ],
+      "occurrences": 2,
       "duplicate_of": null,
-      "score_contribution": 15.6,
+      "score_contribution": 7.68,
       "explanation": {
-        "what": "A production database URL with an inline password is committed to the repository.",
-        "why_it_matters": "Anyone who reaches the filesystem — or reads the git history — gets full database credentials.",
-        "fix": "Move the URL to an environment variable and rotate the password.",
+        "what": "The secret half of the AWS credential pair sits on the line immediately after the key ID, completing a directly usable set of static credentials. services/backup.py injects both into the environment of a shell command that runs the aws CLI.",
+        "why_it_matters": "On its own an access key ID is not usable; paired with this secret it authenticates against the full AWS API surface granted to that IAM principal. This turns a source-code read into hands-on-keyboard access to the acme-invoices-prod S3 bucket and anything else the principal can reach.",
+        "fix": "--- a/config.py\n+++ b/config.py\n@@ -19,6 +19,6 @@ class Config:\n     DATABASE_TIMEOUT = 15\n\n     AWS_ACCESS_KEY_ID = os.environ[\"AWS_ACCESS_KEY_ID\"]\n-    AWS_SECRET_ACCESS_KEY = \"hK3nQ8vZs1RmYd7Tp0LxWc5EbA2JgU9FoiN4XvQz\"\n+    AWS_SECRET_ACCESS_KEY = os.environ[\"AWS_SECRET_ACCESS_KEY\"]\n     AWS_DEFAULT_REGION = \"ap-south-1\"\n     S3_BUCKET = \"acme-invoices-prod\"\n",
         "confidence": "high"
       }
     },
@@ -89,55 +97,961 @@
       "id": "f_003",
       "rank": 3,
       "source": "trivy",
-      "rule_id": "CVE-2024-21538",
-      "title": "Regular expression denial of service in cross-spawn",
-      "severity": "high",
-      "cvss": 7.5,
+      "rule_id": "CVE-2019-20477",
+      "title": "Command execution through PyYAML FullLoader constructor",
+      "severity": "critical",
+      "cvss": 9.8,
       "category": "dependency",
-      "file_path": "services/web/package-lock.json",
-      "line_start": 1420,
-      "line_end": 1420,
+      "file_path": "requirements.txt",
+      "line_start": 3,
+      "line_end": 3,
       "package": {
-        "name": "cross-spawn",
-        "installed_version": "7.0.3",
-        "fixed_version": "7.0.5"
+        "name": "pyyaml",
+        "installed_version": "5.1",
+        "fixed_version": "5.2"
       },
-      "code_snippet": "\"cross-spawn\": \"^7.0.3\"",
-      "cwe": ["CWE-1333"],
-      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-21538"],
+      "code_snippet": "pyyaml==5.1",
+      "cwe": [
+        "CWE-502"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-20477"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 6.56,
+      "explanation": {
+        "what": "PyYAML 5.1 allows the python/object/apply constructor to run through FullLoader, so parsing a crafted document executes arbitrary Python. The pinned version predates every fix in the 5.x line.",
+        "why_it_matters": "services/settings_loader.py calls yaml.load() without a Loader argument on both the on-disk settings file and on the blob passed to load_overrides(), so any YAML an attacker can place in either path becomes code execution in the Flask process. That process also holds the AWS credentials from config.py.",
+        "fix": "--- a/requirements.txt\n+++ b/requirements.txt\n@@ -1,5 +1,5 @@\n requests==2.19.1\n flask==0.12.2\n-pyyaml==5.1\n+pyyaml==5.4\n jinja2==2.10\n urllib3==1.24.1\n",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_004",
+      "rank": 4,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.injection.ssrf-requests.ssrf-requests",
+      "title": "Server-side request forgery in the document proxy",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "routes/proxy.py",
+      "line_start": 22,
+      "line_end": 22,
+      "package": null,
+      "code_snippet": "    resp = requests.get(url)",
+      "cwe": [
+        "CWE-918"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html"
+      ],
       "occurrences": 3,
       "duplicate_of": null,
-      "score_contribution": 9.1,
+      "score_contribution": 4.68,
       "explanation": {
-        "what": "cross-spawn builds a regular expression from caller-controlled input, so a crafted argument can hang the event loop.",
-        "why_it_matters": "The web service parses request paths through this dependency, so a single request can stall the process.",
-        "fix": "Bump cross-spawn to 7.0.5 and regenerate the lockfile.",
+        "what": "The url query parameter is passed straight into requests.get with no scheme allow-list, host validation, or redirect limit. The response body and status are returned verbatim to the caller, making this a fully readable SSRF rather than a blind one.",
+        "why_it_matters": "/api/fetch is registered without authentication in app.py, so an unauthenticated request can reach the cloud metadata endpoint at 169.254.169.254 and read the instance role credentials back out of the HTTP response. The same pattern repeats in preview_remote_document and company_logo on the same blueprint.",
+        "fix": "--- a/routes/proxy.py\n+++ b/routes/proxy.py\n@@ -18,7 +18,8 @@ def fetch():\n     cached = cache_get(url)\n     if cached is not None:\n         return Response(cached[\"body\"], status=200, content_type=cached[\"content_type\"])\n\n-    resp = requests.get(url)\n+    assert_public_http_url(url)\n+    resp = requests.get(url, timeout=10, allow_redirects=False)\n     content_type = resp.headers.get(\"Content-Type\", \"text/plain\")\n     cache_set(url, {\"body\": resp.content, \"content_type\": content_type}, CACHE_TTL)\n",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_005",
+      "rank": 5,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.deserialization.avoid-pyyaml-load.avoid-pyyaml-load",
+      "title": "yaml.load called without a safe Loader",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/settings_loader.py",
+      "line_start": 27,
+      "line_end": 27,
+      "package": null,
+      "code_snippet": "        loaded = yaml.load(handle.read())",
+      "cwe": [
+        "CWE-502"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/502.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 4.31,
+      "explanation": {
+        "what": "yaml.load is called with no Loader argument, which on PyYAML 5.1 falls back to a loader that instantiates arbitrary Python objects. load_overrides() at line 35 does the same thing on a caller-supplied string.",
+        "why_it_matters": "This is the sink that makes the pinned PyYAML CVE exploitable rather than theoretical. Anything that can write settings.yaml or feed a blob to load_overrides gets code execution inside the application process on the first settings read.",
+        "fix": "--- a/services/settings_loader.py\n+++ b/services/settings_loader.py\n@@ -24,5 +24,5 @@ def load_settings(path=None):\n         return _cache[path]\n\n     with open(path) as handle:\n-        loaded = yaml.load(handle.read())\n+        loaded = yaml.safe_load(handle.read())\n\n",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_006",
+      "rank": 6,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.dangerous-system-call.dangerous-system-call",
+      "title": "os.system invoked with interpolated archive path",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/backup.py",
+      "line_start": 15,
+      "line_end": 15,
+      "package": null,
+      "code_snippet": "    os.system(\"tar -czf %s %s/%s\" % (archive, DATA_ROOT, target))",
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 3.93,
+      "explanation": {
+        "what": "The target value reaches os.system through %-formatting with no quoting or validation, so shell metacharacters in it are interpreted by /bin/sh. prune() builds an rm -f command the same way at line 46.",
+        "why_it_matters": "target comes straight from the JSON body of POST /admin/backup, so a value like invoices; curl attacker.tld runs as the container user. Because the Dockerfile never adds a USER instruction, that user is root.",
+        "fix": "Replace os.system with subprocess.run([\"tar\", \"-czf\", archive, os.path.join(DATA_ROOT, target)]) and reject target values that are not a known archive name.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_007",
+      "rank": 7,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.formatted-sql-query.formatted-sql-query",
+      "title": "SQL query built with an f-string from request input",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "routes/users.py",
+      "line_start": 20,
+      "line_end": 20,
+      "package": null,
+      "code_snippet": "    query = f\"SELECT id, email, full_name, role, team_id, is_active, created_at, last_login_at FROM users WHERE email = '{email}'\"",
+      "cwe": [
+        "CWE-89"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 3.65,
+      "explanation": {
+        "what": "The email query parameter is interpolated directly into a SQL string with an f-string and then executed, with no parameter binding. search_users() at line 40 concatenates both the search term and an attacker-chosen ORDER BY column the same way.",
+        "why_it_matters": "GET /api/users/lookup is unauthenticated, so a single crafted email value reads any table in the SQLite database, including the password_hash column that create_user writes. The sort parameter in /api/users/search cannot be parameterised at all as written, so it needs an explicit column allow-list.",
+        "fix": "Bind the value instead of interpolating it: cur.execute(\"SELECT ... FROM users WHERE email = ?\", (email,)), and validate sort against a fixed tuple of column names.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_008",
+      "rank": 8,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+      "title": "subprocess.call with shell=True on a caller-supplied archive name",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/backup.py",
+      "line_start": 23,
+      "line_end": 23,
+      "package": null,
+      "code_snippet": "    code = subprocess.call(cmd, shell=True)",
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 3.37,
+      "explanation": {
+        "what": "restore() concatenates archive_name into a tar command string and runs it through a shell. os.path.join does not sanitise shell metacharacters, and there is no check that the name resolves inside BACKUP_DIR.",
+        "why_it_matters": "archive_name is read from the POST /admin/restore body and reaches the shell unmodified, giving both command injection and path traversal out of the backup directory. The route only checks that the field is non-empty.",
+        "fix": "Drop shell=True and pass an argument list: subprocess.call([\"tar\", \"-xzf\", path, \"-C\", DATA_ROOT]), after confirming path is inside Config.BACKUP_DIR.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_009",
+      "rank": 9,
+      "source": "trivy",
+      "rule_id": "CVE-2019-10906",
+      "title": "Jinja2 sandbox escape via str.format_map",
+      "severity": "high",
+      "cvss": 8.6,
+      "category": "dependency",
+      "file_path": "requirements.txt",
+      "line_start": 4,
+      "line_end": 4,
+      "package": {
+        "name": "jinja2",
+        "installed_version": "2.10",
+        "fixed_version": "2.10.1"
+      },
+      "code_snippet": "jinja2==2.10",
+      "cwe": [],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-10906"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 3.14,
+      "explanation": {
+        "what": "Jinja2 2.10's sandboxed environment fails to block str.format_map, letting a template escape the sandbox and reach arbitrary attributes. The fix landed in 2.10.1.",
+        "why_it_matters": "services/email_templates.py renders templates through jinja2.Template and interpolates the note argument of invoice_email into the body. Any path that lets a user influence that note turns a sandbox escape into disclosure of application internals, including the Config object holding the AWS keys.",
+        "fix": "Upgrade jinja2 to 3.1.6 in requirements.txt, which clears this and the four later Jinja2 advisories in one bump.",
         "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_010",
+      "rank": 10,
+      "source": "trivy",
+      "rule_id": "CVE-2023-43804",
+      "title": "urllib3 does not strip the Cookie header on cross-origin redirects",
+      "severity": "high",
+      "cvss": 8.1,
+      "category": "dependency",
+      "file_path": "requirements.txt",
+      "line_start": 5,
+      "line_end": 5,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.0.6, 1.26.17"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-200"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2023-43804"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 2.9,
+      "explanation": {
+        "what": "urllib3 keeps the Cookie request header when following a redirect to a different origin, leaking it to the redirect target. Versions before 1.26.17 and 2.0.6 are affected.",
+        "why_it_matters": "routes/proxy.py follows redirects by default on every outbound fetch, so a URL that redirects off-host carries whatever headers the pooled connection is holding to a server the attacker chose. This compounds the SSRF on the same blueprint rather than being independent of it.",
+        "fix": "Upgrade urllib3 to 1.26.17 or later in requirements.txt and set allow_redirects=False on the proxy fetches.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_011",
+      "rank": 11,
+      "source": "trivy",
+      "rule_id": "DS-0002",
+      "title": "Container image runs as root",
+      "severity": "high",
+      "cvss": null,
+      "category": "config",
+      "file_path": "Dockerfile",
+      "line_start": null,
+      "line_end": null,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-250"
+      ],
+      "references": [
+        "https://avd.aquasec.com/misconfig/ds-0002"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 2.72,
+      "explanation": {
+        "what": "The Dockerfile never issues a USER instruction, so the image runs its CMD as root. Trivy reports this as a failing Dockerfile security check.",
+        "why_it_matters": "Every code-execution finding in this repo — the os.system calls in backup.py, the yaml.load sink, the pickle cache — lands as uid 0 instead of an unprivileged account. That removes the last containment step between application compromise and a container escape attempt.",
+        "fix": "Add a non-root user to the Dockerfile (RUN useradd -r acme, then USER acme) before the CMD instruction.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_012",
+      "rank": 12,
+      "source": "semgrep",
+      "rule_id": "generic.secrets.security.detected-generic-secret.detected-generic-secret",
+      "title": "SMTP password hardcoded in application config",
+      "severity": "high",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "config.py",
+      "line_start": 29,
+      "line_end": 29,
+      "package": null,
+      "code_snippet": "    SMTP_PASSWORD = \"Summer2023!mailgrid\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/798.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 2.53,
+      "explanation": {
+        "what": "The mail relay password for postmaster@acme-invoicing.io is stored as a literal string next to the SMTP host and username. services/notifications.py passes it straight to server.login().",
+        "why_it_matters": "This grants authenticated send rights on the company's mail domain, which is enough to send convincing invoice and password-reset mail from the real billing address. The value also looks like a rotation-pattern password, so it is likely reused on other systems.",
+        "fix": "Read SMTP_PASSWORD from the environment and rotate the mailgrid credential, since the current one is in git history.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_013",
+      "rank": 13,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+      "title": "Admin endpoint executes arbitrary SQL from the request body",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "routes/admin.py",
+      "line_start": 65,
+      "line_end": 65,
+      "package": null,
+      "code_snippet": "    rows = conn.execute(sql).fetchall()",
+      "cwe": [
+        "CWE-89"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.87,
+      "explanation": {
+        "what": "POST /admin/query takes a sql field from the JSON body and executes it against the SQLite connection with no parsing, allow-listing, or read-only enforcement. The result rows are serialised back to the caller.",
+        "why_it_matters": "The admin blueprint has no authentication decorator anywhere in routes/admin.py, so this is reachable by anyone who can route to /admin/query. Ranked medium rather than high only because the endpoint is plausibly meant to be network-restricted; if it is not, treat it as critical.",
+        "fix": "Delete the endpoint, or gate it behind an authenticated admin check and restrict it to a read-only SQLite connection.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_014",
+      "rank": 14,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.deserialization.pickle.avoid-pickle",
+      "title": "Cached proxy responses deserialized with pickle",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/cache.py",
+      "line_start": 28,
+      "line_end": 28,
+      "package": null,
+      "code_snippet": "        payload = pickle.loads(handle.read())",
+      "cwe": [
+        "CWE-502"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/502.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.73,
+      "explanation": {
+        "what": "cache_get reads a file from Config.CACHE_DIR and passes its bytes to pickle.loads, which executes reduce methods during unpickling. The cache path is an MD5 of the key, so it is predictable to anyone who knows the key.",
+        "why_it_matters": "The Dockerfile runs chmod -R 777 /app, and CACHE_DIR lives under /app/var/cache, so any process in the container can drop a crafted pickle that the next proxy request will execute. It also gives an attacker who achieves a single file write a reliable path to code execution.",
+        "fix": "Serialise cache entries as JSON instead of pickle, and tighten the cache directory permissions.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_015",
+      "rank": 15,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.md5-used-as-password.md5-used-as-password",
+      "title": "Passwords hashed with unsalted-per-user MD5",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "models/user.py",
+      "line_start": 54,
+      "line_end": 54,
+      "package": null,
+      "code_snippet": "    return hashlib.md5((salt + (password or \"\")).encode(\"utf-8\")).hexdigest()",
+      "cwe": [
+        "CWE-327",
+        "CWE-916"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/327.html",
+        "https://cwe.mitre.org/data/definitions/916.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.59,
+      "explanation": {
+        "what": "hash_password uses a single MD5 round over a constant application-wide salt. MD5 is fast enough to brute-force at billions of guesses per second on commodity GPUs, and a shared salt means one rainbow table covers every account.",
+        "why_it_matters": "routes/users.py stores these digests for every account created through the public POST /api/users route. Combined with the SQL injection in the same file, an attacker who dumps the users table can crack the majority of real-world passwords offline within hours.",
+        "fix": "Switch to bcrypt or argon2 with a per-user salt, and rehash on next successful login.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_016",
+      "rank": 16,
+      "source": "semgrep",
+      "rule_id": "python.requests.security.disabled-cert-validation.disabled-cert-validation",
+      "title": "TLS certificate validation disabled on outbound webhooks",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/notifications.py",
+      "line_start": 40,
+      "line_end": 40,
+      "package": null,
+      "code_snippet": "        resp = requests.post(url, json=payload, timeout=WEBHOOK_TIMEOUT, verify=False)",
+      "cwe": [
+        "CWE-295"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/295.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.5,
+      "explanation": {
+        "what": "post_webhook passes verify=False, so requests accepts any certificate including self-signed and expired ones. The retry loop repeats the unverified request up to webhook_retries times.",
+        "why_it_matters": "Webhook payloads carry order references, customer email addresses and amounts, and they are delivered to whatever URL is configured. An attacker positioned on the network path can intercept and rewrite them without needing a valid certificate.",
+        "fix": "Remove verify=False so requests validates the chain, and pin an internal CA bundle if the endpoint uses a private certificate.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_017",
+      "rank": 17,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.insecure-random-generator.insecure-random-generator",
+      "title": "Password reset tokens generated with the random module",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "models/user.py",
+      "line_start": 63,
+      "line_end": 63,
+      "package": null,
+      "code_snippet": "    return \"\".join(random.choice(alphabet) for _ in range(length))",
+      "cwe": [
+        "CWE-338"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/338.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.41,
+      "explanation": {
+        "what": "generate_reset_token builds its token from random.choice, which is backed by a Mersenne Twister seeded from the process start state. The generator is not cryptographically secure and its internal state can be recovered from enough observed output.",
+        "why_it_matters": "services/email_templates.py puts this token straight into the password-reset URL, so predicting it is equivalent to taking over the account. An attacker who can request several resets against accounts they control gets enough output to reconstruct the state and predict tokens for accounts they do not.",
+        "fix": "Use secrets.token_urlsafe(32) instead of the random module for this function.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_018",
+      "rank": 18,
+      "source": "semgrep",
+      "rule_id": "python.jinja2.security.audit.autoescape-disabled.autoescape-disabled",
+      "title": "Jinja2 templates rendered with autoescaping off",
+      "severity": "medium",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/email_templates.py",
+      "line_start": 38,
+      "line_end": 38,
+      "package": null,
+      "code_snippet": "    return Template(template_body).render(**context)",
+      "cwe": [
+        "CWE-79"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/79.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.31,
+      "explanation": {
+        "what": "jinja2.Template defaults to autoescape=False, so every value interpolated into these HTML mail bodies is emitted raw. The INVOICE template additionally renders {{ note }} unescaped into the message body.",
+        "why_it_matters": "User-controlled fields such as display_name, order reference and note flow into HTML that is mailed to customers, so a stored payload becomes markup in the recipient's inbox. The note parameter is the sharpest of these because it is passed through invoice_email as a whole fragment.",
+        "fix": "Construct the templates through an Environment(autoescape=True) rather than calling Template directly.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_019",
+      "rank": 19,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.audit.hardcoded-flask-secret-key.hardcoded-flask-secret-key",
+      "title": "Flask session signing key hardcoded in config",
+      "severity": "medium",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "config.py",
+      "line_start": 13,
+      "line_end": 13,
+      "package": null,
+      "code_snippet": "    SECRET_KEY = \"f8c2a1d94b6e40f7a3d5c8e2b1704f6d\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/798.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 1.22,
+      "explanation": {
+        "what": "The value used to sign Flask session cookies is a literal in config.py, and app.py assigns it to app.secret_key at startup. It is the same across every deployment built from this repository.",
+        "why_it_matters": "Knowing this key lets an attacker forge a session cookie for any user, including one with the admin role, which is exactly what routes/admin.py would otherwise rely on. Sessions also last fourteen days, so a forged cookie stays useful well past any password change.",
+        "fix": "Load SECRET_KEY from the environment, rotate it, and accept that rotation logs every existing session out.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_020",
+      "rank": 20,
+      "source": "trivy",
+      "rule_id": "slack-web-hook",
+      "title": "Slack incoming webhook URL committed to source",
+      "severity": "medium",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "config.py",
+      "line_start": 32,
+      "line_end": 32,
+      "package": null,
+      "code_snippet": "    SLACK_WEBHOOK_URL = \"https://hooks.slack.com/services/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\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/798.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.12,
+      "explanation": {
+        "what": "A full Slack incoming-webhook URL is stored in config.py. The URL is itself the credential — anyone holding it can post to the channel it was created for.",
+        "why_it_matters": "services/notifications.py posts payment and backup-failure notices through this hook, so the target is an operational channel that staff trust. An attacker can post convincing messages there, and can suppress genuine backup-failure alerts by flooding it.",
+        "fix": "Move the URL to an environment variable and revoke the existing hook in the Slack app settings.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_021",
+      "rank": 21,
+      "source": "trivy",
+      "rule_id": "CVE-2024-22195",
+      "title": "Jinja2 HTML attribute injection through the xmlattr filter",
+      "severity": "medium",
+      "cvss": 6.1,
+      "category": "dependency",
+      "file_path": "requirements.txt",
+      "line_start": 4,
+      "line_end": 4,
+      "package": {
+        "name": "jinja2",
+        "installed_version": "2.10",
+        "fixed_version": "3.1.3"
+      },
+      "code_snippet": "jinja2==2.10",
+      "cwe": [
+        "CWE-79"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2024-22195"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 1.03,
+      "explanation": {
+        "what": "The xmlattr filter accepts keys containing spaces and other characters that let a crafted key close the current attribute and open a new one. Fixed in Jinja2 3.1.3.",
+        "why_it_matters": "The mail templates in services/email_templates.py already render with autoescaping disabled, so this advisory stacks with an existing injection surface rather than being blocked by it. Exploitability depends on a template passing user-controlled keys to xmlattr, which none currently do.",
+        "fix": "Covered by the same upgrade to jinja2 3.1.6 recommended for CVE-2019-10906.",
+        "confidence": "low"
+      }
+    },
+    {
+      "id": "f_022",
+      "rank": 22,
+      "source": "trivy",
+      "rule_id": "CVE-2023-32681",
+      "title": "requests leaks the Proxy-Authorization header on redirect",
+      "severity": "medium",
+      "cvss": 6.1,
+      "category": "dependency",
+      "file_path": "requirements.txt",
+      "line_start": 1,
+      "line_end": 1,
+      "package": {
+        "name": "requests",
+        "installed_version": "2.19.1",
+        "fixed_version": "2.31.0"
+      },
+      "code_snippet": "requests==2.19.1",
+      "cwe": [
+        "CWE-200"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2023-32681"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.94,
+      "explanation": {
+        "what": "requests forwards the Proxy-Authorization header to the destination server when a request is redirected to an HTTPS origin. Versions before 2.31.0 are affected.",
+        "why_it_matters": "Every outbound call in routes/proxy.py and services/notifications.py goes through this version of requests and follows redirects by default. If the deployment ever routes through an authenticating proxy, the proxy credential is handed to whichever host an attacker redirects the fetch to.",
+        "fix": "Upgrade requests to 2.32.4 or later in requirements.txt.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_023",
+      "rank": 23,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.audit.debug-enabled.debug-enabled",
+      "title": "Flask development server started with debug mode on all interfaces",
+      "severity": "medium",
+      "cvss": null,
+      "category": "config",
+      "file_path": "app.py",
+      "line_start": 44,
+      "line_end": 44,
+      "package": null,
+      "code_snippet": "    app.run(host=\"0.0.0.0\", port=int(os.environ.get(\"PORT\", 5000)), debug=True)",
+      "cwe": [
+        "CWE-489"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/489.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.84,
+      "explanation": {
+        "what": "app.run is called with debug=True and bound to 0.0.0.0. Debug mode enables the Werkzeug interactive debugger, which exposes a console on any unhandled exception, and the bind address makes the server reachable on every interface.",
+        "why_it_matters": "The Werkzeug console executes arbitrary Python in the application process, so any route that raises becomes a remote shell unless the PIN mechanism holds. This is also the Dockerfile's CMD, meaning the container ships this configuration by default rather than only in local development.",
+        "fix": "Run the app under a WSGI server such as gunicorn and drive debug from an environment variable that defaults to False.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_024",
+      "rank": 24,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.audit.secure-set-cookie.secure-set-cookie",
+      "title": "Session cookie configured without the Secure flag",
+      "severity": "medium",
+      "cvss": null,
+      "category": "config",
+      "file_path": "config.py",
+      "line_start": 15,
+      "line_end": 16,
+      "package": null,
+      "code_snippet": "    SESSION_COOKIE_HTTPONLY = True\n    PERMANENT_SESSION_LIFETIME = 86400 * 14",
+      "cwe": [
+        "CWE-614"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/614.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.75,
+      "explanation": {
+        "what": "SESSION_COOKIE_HTTPONLY and the session lifetime are set, but SESSION_COOKIE_SECURE and SESSION_COOKIE_SAMESITE are never configured, so both take their permissive defaults. The session also lasts fourteen days.",
+        "why_it_matters": "Without the Secure flag the session cookie is sent over plaintext HTTP, and without SameSite it rides along on cross-site requests. The long lifetime widens the window in which a captured cookie remains valid.",
+        "fix": "Set SESSION_COOKIE_SECURE = True and SESSION_COOKIE_SAMESITE = \"Lax\" on Config, and shorten PERMANENT_SESSION_LIFETIME.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_025",
+      "rank": 25,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.insecure-hash-algorithm-md5.insecure-hash-algorithm-md5",
+      "title": "MD5 used to derive cache file names",
+      "severity": "low",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/cache.py",
+      "line_start": 10,
+      "line_end": 10,
+      "package": null,
+      "code_snippet": "    digest = hashlib.md5(key.encode(\"utf-8\")).hexdigest()",
+      "cwe": [
+        "CWE-327"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/327.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.56,
+      "explanation": {
+        "what": "Cache filenames are MD5 digests of the cache key. MD5 is not collision resistant, so two different keys can be made to map to the same cache file.",
+        "why_it_matters": "A deliberate collision lets one proxied URL's response be served for a different URL, which is a cache-poisoning primitive rather than a direct compromise. Low severity because the cache is per-container and short-lived, but it is the same directory the pickle finding targets.",
+        "fix": "Use hashlib.sha256 for the digest; no other change is needed since the value is only a filename.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_026",
+      "rank": 26,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+      "title": "subprocess.check_output with shell=True in disk usage helper",
+      "severity": "low",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/backup.py",
+      "line_start": 52,
+      "line_end": 52,
+      "package": null,
+      "code_snippet": "    out = subprocess.check_output(\"du -sh \" + Config.BACKUP_DIR, shell=True)",
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.47,
+      "explanation": {
+        "what": "disk_usage builds a shell command by concatenating Config.BACKUP_DIR and runs it with shell=True. The interpolated value is a module constant rather than request input.",
+        "why_it_matters": "This is not directly reachable from user input today, so it is ranked low, but it becomes injectable the moment BACKUP_DIR is made configurable. It is flagged mainly because it is the same unsafe pattern as the two exploitable calls elsewhere in this file.",
+        "fix": "Pass an argument list: subprocess.check_output([\"du\", \"-sh\", Config.BACKUP_DIR]).",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_027",
+      "rank": 27,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.hardcoded-password-default-argument.hardcoded-password-default-argument",
+      "title": "Password salt hardcoded as a default argument",
+      "severity": "low",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "models/user.py",
+      "line_start": 53,
+      "line_end": 53,
+      "package": null,
+      "code_snippet": "def hash_password(password, salt=PASSWORD_SALT):",
+      "cwe": [
+        "CWE-760"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/760.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 0.39,
+      "explanation": {
+        "what": "PASSWORD_SALT is the constant string \"acme-invoicing\" and is bound as the default salt for both hash_password and verify_password. Every account therefore shares one publicly known salt.",
+        "why_it_matters": "A shared, published salt removes the only benefit salting provides, letting one precomputed table cover the whole users table. On its own it is low impact; combined with the MD5 hashing finding it is what makes offline cracking cheap.",
+        "fix": "Generate a per-user salt at registration and store it beside the hash, or adopt bcrypt which handles this internally.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_028",
+      "rank": 28,
+      "source": "trivy",
+      "rule_id": "CVE-2026-27205",
+      "title": "Flask information disclosure via improper caching of session data",
+      "severity": "low",
+      "cvss": 4.3,
+      "category": "dependency",
+      "file_path": "requirements.txt",
+      "line_start": 2,
+      "line_end": 2,
+      "package": {
+        "name": "flask",
+        "installed_version": "0.12.2",
+        "fixed_version": "3.1.3"
+      },
+      "code_snippet": "flask==0.12.2",
+      "cwe": [
+        "CWE-524"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2026-27205"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.33,
+      "explanation": {
+        "what": "Flask can permit session data to be cached by intermediaries when response headers are not set restrictively, disclosing it to later requests. Addressed in 3.1.3.",
+        "why_it_matters": "The pinned 0.12.2 is many major versions behind and carries three other advisories besides this one. Impact here is limited because no shared cache sits in front of the demo deployment, but the version gap is the underlying problem rather than this single CVE.",
+        "fix": "Upgrade flask to 3.1.3 in requirements.txt, which also clears CVE-2018-1000656, CVE-2019-1010083 and CVE-2023-30861.",
+        "confidence": "low"
+      }
+    },
+    {
+      "id": "f_029",
+      "rank": 29,
+      "source": "semgrep",
+      "rule_id": "python.flask.security.audit.debug-enabled.debug-enabled",
+      "title": "Debug flag derived from a mutable environment variable",
+      "severity": "low",
+      "cvss": null,
+      "category": "config",
+      "file_path": "config.py",
+      "line_start": 11,
+      "line_end": 11,
+      "package": null,
+      "code_snippet": "    DEBUG = ENV != \"production\"",
+      "cwe": [
+        "CWE-489"
+      ],
+      "references": [
+        "https://cwe.mitre.org/data/definitions/489.html"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.26,
+      "explanation": {
+        "what": "DEBUG is computed from APP_ENV, defaulting to production and therefore to False. Anything that can set APP_ENV to another value flips the application into debug mode.",
+        "why_it_matters": "The Dockerfile does pin APP_ENV=production, so the default is safe and this is ranked low. It is worth noting only because the same variable governs the Werkzeug debugger, so an environment override is a one-variable path to the interactive console.",
+        "fix": "Read the debug flag from an explicit APP_DEBUG variable rather than inferring it from the environment name.",
+        "confidence": "medium"
+      }
+    },
+    {
+      "id": "f_030",
+      "rank": 30,
+      "source": "trivy",
+      "rule_id": "DS-0026",
+      "title": "No HEALTHCHECK defined in the container image",
+      "severity": "low",
+      "cvss": null,
+      "category": "config",
+      "file_path": "Dockerfile",
+      "line_start": null,
+      "line_end": null,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [],
+      "references": [
+        "https://avd.aquasec.com/misconfig/ds-0026"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 0.19,
+      "explanation": {
+        "what": "The Dockerfile contains no HEALTHCHECK instruction, so the orchestrator cannot tell a wedged process from a healthy one. Trivy reports this as a low-severity Dockerfile check.",
+        "why_it_matters": "This is an availability and operations gap rather than an exploitable weakness. It matters mildly in a security context because a container that has been compromised and stopped serving traffic will not be restarted or flagged automatically.",
+        "fix": "Add a HEALTHCHECK instruction that curls the existing /health route defined in app.py.",
+        "confidence": "high"
       }
     }
   ],
   "attack_paths": [
     {
       "id": "ap_001",
-      "title": "Unauthenticated RCE to database credential theft",
+      "title": "Committed AWS keys and a proxy SSRF combine into cloud account access",
       "severity": "critical",
       "likelihood": "likely",
-      "narrative": "An attacker posts a crafted payload to the public API, which deserializes it with pickle and executes code inside the container. From there they read config.py, recover the hardcoded PostgreSQL password, and connect directly to the production database.",
+      "narrative": "An attacker who clones or reads the repository recovers a complete AWS credential pair from config.py, which grants direct access to the acme-invoices-prod S3 bucket. Confirming the account is AWS, they turn to the unauthenticated /api/fetch proxy and point it at the instance metadata service on 169.254.169.254, reading the container's IAM role credentials back out of the HTTP response. Those role credentials are broader and shorter-lived than the static key, and the attacker uses them against the backup path in services/backup.py, where an injectable os.system call runs as root and exfiltrates archives to storage they control.",
       "steps": [
         {
           "order": 1,
           "finding_id": "f_001",
-          "label": "Pickle deserialization gives code execution",
-          "technique": "Execution"
+          "kind": "entry",
+          "label": "Hardcoded AWS access key ID in config.py",
+          "technique": "Credential access"
         },
         {
           "order": 2,
           "finding_id": "f_002",
-          "label": "Hardcoded DB credential read from disk",
-          "technique": "Credential access"
+          "kind": "pivot",
+          "label": "Paired secret key grants S3 to acme-invoices-prod",
+          "technique": "Valid accounts"
+        },
+        {
+          "order": 3,
+          "finding_id": "f_004",
+          "kind": "pivot",
+          "label": "SSRF in /api/fetch reaches the metadata service",
+          "technique": "Discovery"
+        },
+        {
+          "order": 4,
+          "finding_id": "f_006",
+          "kind": "impact",
+          "label": "Command injection in backup.py exfiltrates as root",
+          "technique": "Exfiltration"
         }
       ],
-      "edges": [{ "from": "f_001", "to": "f_002" }]
+      "edges": [
+        {
+          "from": "f_001",
+          "to": "f_002",
+          "label": "adjacent line completes the key pair"
+        },
+        {
+          "from": "f_002",
+          "to": "f_004",
+          "label": "S3 bucket confirms AWS tenancy"
+        },
+        {
+          "from": "f_004",
+          "to": "f_006",
+          "label": "instance role token reaches the backup shell"
+        }
+      ]
+    },
+    {
+      "id": "ap_002",
+      "title": "Unauthenticated SQL injection to full database control",
+      "severity": "high",
+      "likelihood": "possible",
+      "narrative": "The attacker calls GET /api/users/lookup with a crafted email parameter, which is interpolated into a query with an f-string and dumps the users table including password hashes. Those hashes are single-round MD5 over one shared salt, so a commodity GPU recovers the plaintext for most accounts within hours, including an administrator. With admin credentials in hand they reach POST /admin/query, which executes any SQL sent in the request body and gives full read and write access to the application database.",
+      "steps": [
+        {
+          "order": 1,
+          "finding_id": "f_007",
+          "kind": "entry",
+          "label": "f-string SQL in /api/users/lookup",
+          "technique": "Initial access"
+        },
+        {
+          "order": 2,
+          "finding_id": "f_015",
+          "kind": "pivot",
+          "label": "MD5 hashes with a shared salt crack offline",
+          "technique": "Credential access"
+        },
+        {
+          "order": 3,
+          "finding_id": "f_013",
+          "kind": "impact",
+          "label": "/admin/query runs arbitrary SQL",
+          "technique": "Impact"
+        }
+      ],
+      "edges": [
+        {
+          "from": "f_007",
+          "to": "f_015",
+          "label": "dumps the password_hash column"
+        },
+        {
+          "from": "f_015",
+          "to": "f_013",
+          "label": "cracked admin password unlocks the admin blueprint"
+        }
+      ]
     }
   ],
   "errors": []

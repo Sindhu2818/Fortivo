@@ -18,7 +18,7 @@ For the at-a-glance "what's left right now" view, see [STATUS.md](STATUS.md).
 | 6 | Attack paths — build 2–5 step chains + edges from ranked findings | S | todo | `attack_paths` non-empty and every `finding_id` resolves |
 | 7 | LLM reasoning — Gemini structured JSON fills `explanation`, `narrative`, `risk.summary` | S | todo | every reported finding has non-null `explanation` |
 | 8 | Pipeline wire-up — scan → normalize → reduce → score → paths → LLM → `results/<scan_id>.json`, plus `GET /results/{scan_id}` and `GET /results` | S | todo | `curl localhost:8000/results/<id>` returns a document that validates against `backend/models.py` |
-| 9 | Frontend scaffold + DEMO_MODE — Next.js 14 App Router, Tailwind, shadcn/ui; `NEXT_PUBLIC_DEMO_MODE=true` serves `fixtures/mock_results.json` | C | in-progress | `npm run dev` and `localhost:3000` renders with the backend stopped |
+| 9 | Frontend scaffold + DEMO_MODE — Next.js 14 App Router, Tailwind, shadcn/ui; `NEXT_PUBLIC_DEMO_MODE=true` serves `fixtures/mock_results.json` | C | done | `npm run dev` and `localhost:3000` renders with the backend stopped |
 | 10 | Scan page — repo URL input, submit, progress state | C | todo | submitting a repo navigates to the dashboard for that `scan_id` |
 | 11 | Dashboard — risk gauge, four component bars, stats, ranked findings table | C | todo | `localhost:3000/dashboard/<scan_id>` shows score + 30 rows |
 | 12 | Finding drawer — click a row, see snippet, package, CWE, refs, LLM explanation | C | todo | drawer opens with explanation text for any row |
