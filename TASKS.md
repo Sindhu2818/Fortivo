@@ -24,7 +24,7 @@ For the at-a-glance view, see `STATUS.md`.
 | 8 | Pipeline wire-up — scan → normalize → reduce → score → paths → LLM → results | S | in-progress | `/results/<id>` returns a valid document |
 | 9 | Frontend scaffold + DEMO_MODE | C | done | frontend runs without backend |
 | 10 | Scan page | C | done | submit navigates to dashboard |
-| 11 | Dashboard | C | todo | dashboard renders findings |
+| 11 | Dashboard | C | done | dashboard renders findings |
 | 12 | Finding drawer | C | todo | drawer opens correctly |
 | 13 | Attack graph | C | todo | graph renders |
 | 14 | Polish | C | todo | responsive, no console errors |

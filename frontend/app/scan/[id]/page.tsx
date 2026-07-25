@@ -3,12 +3,12 @@
  * off to the dashboard.
  *
  * Responsibility: own the polling loop and the three top-level states —
- * in-flight, failed, done. The progress visual is ProgressStages; the dashboard
- * is B3's, and until it exists this page renders the raw counts as a
- * placeholder.
+ * in-flight, failed, done. The progress visual is ProgressStages; the done state
+ * is the dashboard — RiskGauge and ReductionStat in a header row, FindingsTable
+ * below. It holds the selected-finding id that B4's drawer will consume.
  *
  * DoD: with DEMO_MODE on, opening this page walks the six stages, collapses the
- * counter at the reducing stage, and swaps in the result view afterwards.
+ * counter at the reducing stage, and swaps in the dashboard afterwards.
  */
 
 'use client'
@@ -16,7 +16,10 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
+import { FindingsTable } from '@/components/FindingsTable'
 import { ProgressStages } from '@/components/ProgressStages'
+import { ReductionStat } from '@/components/ReductionStat'
+import { RiskGauge } from '@/components/RiskGauge'
 import { Button } from '@/components/ui/button'
 import { getResults, getStatus } from '@/lib/api'
 import type { ScanCounts, ScanProgress, ScanResult } from '@/lib/types'
@@ -33,6 +36,8 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showResult, setShowResult] = useState(false)
+  // Selected row. The drawer that consumes it lands in B4.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -113,24 +118,30 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
   }
 
   if (result && showResult) {
-    // Placeholder — Task B3 replaces this block with the real dashboard.
     return (
-      <div className="mx-auto max-w-2xl px-6 py-16">
+      <div className="mx-auto max-w-6xl px-6 py-12">
         <Header scanId={scanId} repoName={result.repo_name} />
-        <div className="mt-8 rounded-2xl border border-border bg-card p-8">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-            Scan complete
-          </p>
-          <p className="mt-4 font-mono text-5xl font-semibold tabular-nums text-primary">
-            {result.stats.reported_findings}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            findings that matter, out of {result.stats.raw_findings.toLocaleString()} raw
-            ({result.stats.after_dedup.toLocaleString()} after dedup).
-          </p>
-          <p className="mt-6 text-xs text-muted-foreground/70">
-            The dashboard lands in Task B3.
-          </p>
+
+        {/* Header row: the score on the left, the reduction story on the right. */}
+        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <div className="flex items-center justify-center rounded-2xl border border-border bg-card p-8 lg:col-span-2">
+            <RiskGauge score={result.risk.score} />
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-8 lg:col-span-3">
+            <ReductionStat stats={result.stats} />
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="mb-4 text-lg font-semibold text-foreground">
+            Ranked findings{' '}
+            <span className="text-muted-foreground/70">({result.findings.length})</span>
+          </h2>
+          <FindingsTable
+            findings={result.findings}
+            onSelect={setSelectedId}
+            selectedId={selectedId}
+          />
         </div>
       </div>
     )
