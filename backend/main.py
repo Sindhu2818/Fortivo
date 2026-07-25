@@ -25,8 +25,10 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Dict, List
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -40,6 +42,17 @@ from models import (
     ScanSummary,
 )
 from utils.validators import validate_repo_input
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+
+# python-dotenv was already a dependency but nothing ever called it, so `.env`
+# was inert: GEMINI_API_KEY and GROK_API_KEY could be filled in and the LLM
+# agents would still fall back to template prose. Pinned to the repo root
+# rather than found by walking up from the cwd, so it loads the same file
+# whether uvicorn was started from backend/ or from the repo root.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # ---------------------------------------------------------------------------
 # Logging Configuration

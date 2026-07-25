@@ -31,7 +31,9 @@ from models import AttackPath, Finding, Risk
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_GROK_MODEL = "grok-2"
+# xAI retired grok-2 — the live API answers 400 "Model not found: grok-2".
+# grok-4 is what .env.example already specifies; this default was just stale.
+DEFAULT_GROK_MODEL = "grok-4"
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 MAX_RETRIES = 2
 INITIAL_BACKOFF_SECONDS = 1.0

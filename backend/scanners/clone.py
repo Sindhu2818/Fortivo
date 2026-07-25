@@ -79,14 +79,29 @@ class CloneResult:
         self.cleanup()
 
 
-def _prepare_local_path(repo_url: str) -> CloneResult:
-    path = Path(repo_url)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-    # Resolve relative paths from the project root instead of the current
-    # working directory so "./demo-app" works no matter where uvicorn is started.
+
+def resolve_local_path(repo_url: str) -> Path:
+    """Resolve a local repo_url the one way the whole backend agrees on.
+
+    Relative paths resolve against the project root, not the process's current
+    working directory, so "./demo-app" means the same thing wherever uvicorn was
+    started from.
+
+    This is the single source of truth on purpose: utils/validators.py used to
+    resolve the same string against the cwd, which made the two disagree about
+    what a relative path meant and left *no* relative path that satisfied both.
+    Both callers go through here now.
+    """
+    path = Path(repo_url)
     if not path.is_absolute():
-        project_root = Path(__file__).resolve().parents[2]
-        path = (project_root / path).resolve()
+        path = PROJECT_ROOT / path
+    return path.resolve()
+
+
+def _prepare_local_path(repo_url: str) -> CloneResult:
+    path = resolve_local_path(repo_url)
 
     if not path.is_dir():
         raise CloneError(f"Local repository path is not a directory: {repo_url}")
