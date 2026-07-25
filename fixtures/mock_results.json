@@ -3,141 +3,1094 @@
   "repo_url": "./demo-app",
   "repo_name": "demo-app",
   "scanned_at": "2026-07-25T14:23:01Z",
-  "duration_seconds": 41.7,
+  "duration_seconds": 38.4,
   "status": "complete",
   "risk": {
-    "score": 78,
+    "score": 85,
     "band": "critical",
     "components": {
-      "severity": 82,
-      "exploitability": 71,
-      "exposure": 88,
-      "blast_radius": 64
+      "severity": 100,
+      "exploitability": 74,
+      "exposure": 82,
+      "blast_radius": 68
     },
-    "summary": "An internet-reachable endpoint deserializes untrusted input, and the same service ships a hardcoded database password, so one request chains to full database access."
+    "summary": "Three internet-reachable entry points -- the debug console, the users endpoint, and the proxy route -- each chain into code execution or data theft, and the same service hardcodes both AWS and database credentials."
   },
   "stats": {
-    "raw_findings": 412,
-    "after_dedup": 260,
-    "reported_findings": 3,
+    "raw_findings": 57,
+    "after_dedup": 47,
+    "reported_findings": 30,
     "by_severity": {
-      "critical": 2,
-      "high": 1,
-      "medium": 0,
+      "critical": 6,
+      "high": 22,
+      "medium": 2,
       "low": 0,
       "info": 0
     },
     "by_source": {
-      "trivy": 2,
-      "semgrep": 1
+      "trivy": 19,
+      "semgrep": 11
     }
   },
   "findings": [
     {
       "id": "f_001",
-      "rank": 1,
-      "source": "semgrep",
-      "rule_id": "python.lang.security.deserialization.pickle.avoid-pickle",
-      "title": "Untrusted input passed to pickle.loads",
+      "source": "trivy",
+      "rule_id": "CVE-2019-20477",
+      "title": "PyYAML: command execution through python/object/apply constructor in FullLoader",
       "severity": "critical",
-      "cvss": null,
-      "category": "code",
-      "file_path": "services/api/handlers.py",
-      "line_start": 47,
-      "line_end": 47,
-      "package": null,
-      "code_snippet": "payload = pickle.loads(base64.b64decode(request.data))",
-      "cwe": ["CWE-502"],
-      "references": ["https://cwe.mitre.org/data/definitions/502.html"],
+      "cvss": 9.8,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "pyyaml",
+        "installed_version": "5.1",
+        "fixed_version": "5.2"
+      },
+      "code_snippet": "pyyaml==5.1",
+      "cwe": [
+        "CWE-502"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-20477"
+      ],
       "occurrences": 1,
       "duplicate_of": null,
-      "score_contribution": 18.2,
+      "score_contribution": 22.0,
       "explanation": {
-        "what": "The request body is deserialized with pickle, which executes arbitrary constructors during load.",
-        "why_it_matters": "This handler is mounted on the public API router, so any unauthenticated caller can run code in the container.",
-        "fix": "Replace pickle with json.loads and validate the parsed body against a schema.",
+        "what": "PyYAML's `yaml.load` without `SafeLoader` deserializes arbitrary Python objects from YAML input.",
+        "why_it_matters": "settings_loader.py reads YAML from disk; if that file path is ever attacker-influenced, this is direct code execution.",
+        "fix": "Bump PyYAML to >=5.2 and use `yaml.safe_load` everywhere.",
         "confidence": "high"
-      }
+      },
+      "rank": 1
     },
     {
       "id": "f_002",
-      "rank": 2,
       "source": "trivy",
-      "rule_id": "generic-db-password",
-      "title": "Hardcoded PostgreSQL password in source",
+      "rule_id": "CVE-2020-14343",
+      "title": "PyYAML: incomplete fix for CVE-2020-1747",
       "severity": "critical",
-      "cvss": null,
-      "category": "secret",
-      "file_path": "services/api/config.py",
-      "line_start": 12,
-      "line_end": 12,
-      "package": null,
-      "code_snippet": "DATABASE_URL = \"postgresql://admin:hunter2@db.internal:5432/prod\"",
-      "cwe": ["CWE-798"],
-      "references": [],
-      "occurrences": 4,
+      "cvss": 9.8,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "pyyaml",
+        "installed_version": "5.1",
+        "fixed_version": "5.4"
+      },
+      "code_snippet": "pyyaml==5.1",
+      "cwe": [
+        "CWE-20"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2020-14343"
+      ],
+      "occurrences": 1,
       "duplicate_of": null,
-      "score_contribution": 15.6,
+      "score_contribution": 22.0,
       "explanation": {
-        "what": "A production database URL with an inline password is committed to the repository.",
-        "why_it_matters": "Anyone who reaches the filesystem — or reads the git history — gets full database credentials.",
-        "fix": "Move the URL to an environment variable and rotate the password.",
+        "what": "A second, related full_load code-execution flaw in the same PyYAML 5.1 release.",
+        "why_it_matters": "Same exposure as the other PyYAML CVEs -- one dependency bump fixes all three.",
+        "fix": "Bump PyYAML to >=5.4.",
         "confidence": "high"
-      }
+      },
+      "rank": 2
     },
     {
       "id": "f_003",
-      "rank": 3,
       "source": "trivy",
-      "rule_id": "CVE-2024-21538",
-      "title": "Regular expression denial of service in cross-spawn",
+      "rule_id": "CVE-2020-1747",
+      "title": "PyYAML: arbitrary command execution through python/object/new when FullLoader is used",
+      "severity": "critical",
+      "cvss": 9.8,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "pyyaml",
+        "installed_version": "5.1",
+        "fixed_version": "5.3.1"
+      },
+      "code_snippet": "pyyaml==5.1",
+      "cwe": [
+        "CWE-20"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2020-1747"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 22.0,
+      "explanation": {
+        "what": "A third PyYAML 5.1 deserialization flaw via crafted YAML tags.",
+        "why_it_matters": "Confirms this isn't a one-off -- the whole 5.1 line is unsafe to keep pinned.",
+        "fix": "Bump PyYAML to >=5.3.1.",
+        "confidence": "high"
+      },
+      "rank": 3
+    },
+    {
+      "id": "f_004",
+      "source": "trivy",
+      "rule_id": "aws-access-key-id",
+      "title": "AWS Access Key ID committed to source",
+      "severity": "critical",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "demo-app/config.py",
+      "line_start": 21,
+      "line_end": 21,
+      "package": null,
+      "code_snippet": "AWS_ACCESS_KEY_ID = \"********************\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 25.3,
+      "explanation": {
+        "what": "A live-looking AWS access key ID is hardcoded in config.py.",
+        "why_it_matters": "Anyone with filesystem or git-history access gets a working AWS credential half.",
+        "fix": "Remove the key from source, rotate it in IAM, and load it from an environment variable.",
+        "confidence": "high"
+      },
+      "rank": 4
+    },
+    {
+      "id": "f_005",
+      "source": "trivy",
+      "rule_id": "aws-secret-access-key",
+      "title": "AWS Secret Access Key committed to source",
+      "severity": "critical",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "demo-app/config.py",
+      "line_start": 22,
+      "line_end": 22,
+      "package": null,
+      "code_snippet": "AWS_SECRET_ACCESS_KEY = \"****************************************\"",
+      "cwe": [
+        "CWE-798"
+      ],
+      "references": [],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 25.3,
+      "explanation": {
+        "what": "The AWS secret access key paired with the access key above is hardcoded on the next line.",
+        "why_it_matters": "Together with the access key ID, this is a complete, usable AWS credential sitting in version control.",
+        "fix": "Rotate the credential immediately and load both values from a secrets manager or env vars.",
+        "confidence": "high"
+      },
+      "rank": 5
+    },
+    {
+      "id": "f_006",
+      "source": "semgrep",
+      "rule_id": "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+      "title": "SQL injection via string-built query",
+      "severity": "critical",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/routes/users.py",
+      "line_start": 14,
+      "line_end": 21,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-89"
+      ],
+      "references": [
+        "https://docs.djangoproject.com/en/3.0/topics/security/#sql-injection-protection"
+      ],
+      "occurrences": 5,
+      "duplicate_of": null,
+      "score_contribution": 35.2,
+      "explanation": {
+        "what": "routes/users.py builds a SQL query by string-formatting request data directly into it.",
+        "why_it_matters": "This endpoint is reachable without authentication, so a single crafted request can read or alter arbitrary rows.",
+        "fix": "Switch to parameterized queries (`cursor.execute(query, params)`) or the ORM.",
+        "confidence": "high"
+      },
+      "rank": 6
+    },
+    {
+      "id": "f_007",
+      "source": "trivy",
+      "rule_id": "CVE-2019-10906",
+      "title": "python-jinja2: str.format_map allows sandbox escape",
+      "severity": "high",
+      "cvss": 8.6,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "jinja2",
+        "installed_version": "2.10",
+        "fixed_version": "2.10.1"
+      },
+      "code_snippet": "jinja2==2.10",
+      "cwe": [],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-10906"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "python-jinja2: str.format_map allows sandbox escape in jinja2.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade jinja2 to 2.10.1.",
+        "confidence": "medium"
+      },
+      "rank": 7
+    },
+    {
+      "id": "f_008",
+      "source": "trivy",
+      "rule_id": "CVE-2023-43804",
+      "title": "python-urllib3: Cookie request header isn't stripped during cross-origin redirects",
+      "severity": "high",
+      "cvss": 8.1,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.0.6, 1.26.17"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-200"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2023-43804"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "python-urllib3: Cookie request header isn't stripped during cross-origin redirects in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 2.0.6, 1.26.17.",
+        "confidence": "medium"
+      },
+      "rank": 8
+    },
+    {
+      "id": "f_009",
+      "source": "trivy",
+      "rule_id": "CVE-2018-1000656",
+      "title": "python-flask: Denial of Service via crafted JSON file",
       "severity": "high",
       "cvss": 7.5,
       "category": "dependency",
-      "file_path": "services/web/package-lock.json",
-      "line_start": 1420,
-      "line_end": 1420,
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
       "package": {
-        "name": "cross-spawn",
-        "installed_version": "7.0.3",
-        "fixed_version": "7.0.5"
+        "name": "flask",
+        "installed_version": "0.12.2",
+        "fixed_version": "0.12.3"
       },
-      "code_snippet": "\"cross-spawn\": \"^7.0.3\"",
-      "cwe": ["CWE-1333"],
-      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-21538"],
-      "occurrences": 3,
+      "code_snippet": "flask==0.12.2",
+      "cwe": [
+        "CWE-20"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2018-1000656"
+      ],
+      "occurrences": 1,
       "duplicate_of": null,
-      "score_contribution": 9.1,
+      "score_contribution": 14.0,
       "explanation": {
-        "what": "cross-spawn builds a regular expression from caller-controlled input, so a crafted argument can hang the event loop.",
-        "why_it_matters": "The web service parses request paths through this dependency, so a single request can stall the process.",
-        "fix": "Bump cross-spawn to 7.0.5 and regenerate the lockfile.",
+        "what": "python-flask: Denial of Service via crafted JSON file in flask.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade flask to 0.12.3.",
         "confidence": "medium"
-      }
+      },
+      "rank": 9
+    },
+    {
+      "id": "f_010",
+      "source": "trivy",
+      "rule_id": "CVE-2019-1010083",
+      "title": "python-flask: unexpected memory usage can lead to denial of service via crafted encoded JSON data",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "flask",
+        "installed_version": "0.12.2",
+        "fixed_version": "1.0"
+      },
+      "code_snippet": "flask==0.12.2",
+      "cwe": [],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-1010083"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "python-flask: unexpected memory usage can lead to denial of service via crafted encoded JSON data in flask.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade flask to 1.0.",
+        "confidence": "medium"
+      },
+      "rank": 10
+    },
+    {
+      "id": "f_011",
+      "source": "trivy",
+      "rule_id": "CVE-2023-30861",
+      "title": "flask: Possible disclosure of permanent session cookie due to missing Vary: Cookie header",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "flask",
+        "installed_version": "0.12.2",
+        "fixed_version": "2.3.2, 2.2.5"
+      },
+      "code_snippet": "flask==0.12.2",
+      "cwe": [
+        "CWE-539"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2023-30861"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "flask: Possible disclosure of permanent session cookie due to missing Vary: Cookie header in flask.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade flask to 2.3.2, 2.2.5.",
+        "confidence": "medium"
+      },
+      "rank": 11
+    },
+    {
+      "id": "f_012",
+      "source": "trivy",
+      "rule_id": "CVE-2018-18074",
+      "title": "python-requests: Redirect from HTTPS to HTTP does not remove Authorization header",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "requests",
+        "installed_version": "2.19.1",
+        "fixed_version": "2.20.0"
+      },
+      "code_snippet": "requests==2.19.1",
+      "cwe": [
+        "CWE-522"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2018-18074"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "python-requests: Redirect from HTTPS to HTTP does not remove Authorization header in requests.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade requests to 2.20.0.",
+        "confidence": "medium"
+      },
+      "rank": 12
+    },
+    {
+      "id": "f_013",
+      "source": "trivy",
+      "rule_id": "CVE-2019-11324",
+      "title": "python-urllib3: Certification mishandle when error should be thrown",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "1.24.2"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-295"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2019-11324"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "python-urllib3: Certification mishandle when error should be thrown in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 1.24.2.",
+        "confidence": "medium"
+      },
+      "rank": 13
+    },
+    {
+      "id": "f_014",
+      "source": "trivy",
+      "rule_id": "CVE-2025-66418",
+      "title": "urllib3: urllib3: Unbounded decompression chain leads to resource exhaustion",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.6.0"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-770"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2025-66418"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "urllib3: urllib3: Unbounded decompression chain leads to resource exhaustion in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 2.6.0.",
+        "confidence": "medium"
+      },
+      "rank": 14
+    },
+    {
+      "id": "f_015",
+      "source": "trivy",
+      "rule_id": "CVE-2025-66471",
+      "title": "urllib3: urllib3 Streaming API improperly handles highly compressed data",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.6.0"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-409"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2025-66471"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "urllib3: urllib3 Streaming API improperly handles highly compressed data in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 2.6.0.",
+        "confidence": "medium"
+      },
+      "rank": 15
+    },
+    {
+      "id": "f_016",
+      "source": "trivy",
+      "rule_id": "CVE-2026-21441",
+      "title": "urllib3: urllib3 vulnerable to decompression-bomb safeguard bypass when following HTTP redirects (streaming API)",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.6.3"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-409"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2026-21441"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "urllib3: urllib3 vulnerable to decompression-bomb safeguard bypass when following HTTP redirects (streaming API) in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 2.6.3.",
+        "confidence": "medium"
+      },
+      "rank": 16
+    },
+    {
+      "id": "f_017",
+      "source": "trivy",
+      "rule_id": "CVE-2026-44431",
+      "title": "urllib3: urllib3: Information disclosure via cross-origin redirects forwarding sensitive headers",
+      "severity": "high",
+      "cvss": 5.3,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "urllib3",
+        "installed_version": "1.24.1",
+        "fixed_version": "2.7.0"
+      },
+      "code_snippet": "urllib3==1.24.1",
+      "cwe": [
+        "CWE-200"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2026-44431"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "urllib3: urllib3: Information disclosure via cross-origin redirects forwarding sensitive headers in urllib3.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade urllib3 to 2.7.0.",
+        "confidence": "medium"
+      },
+      "rank": 17
+    },
+    {
+      "id": "f_018",
+      "source": "trivy",
+      "rule_id": "DS-0002",
+      "title": "Image user should not be 'root'",
+      "severity": "high",
+      "cvss": null,
+      "category": "config",
+      "file_path": "demo-app/Dockerfile",
+      "line_start": null,
+      "line_end": null,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [],
+      "references": [
+        "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/",
+        "https://avd.aquasec.com/misconfig/ds-0002"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "The Dockerfile never sets a USER instruction, so the container runs as root by default.",
+        "why_it_matters": "Any code-execution bug elsewhere in the app now runs as root inside the container, widening its blast radius.",
+        "fix": "Add `USER appuser` (a non-root user created earlier in the Dockerfile) before the CMD.",
+        "confidence": "high"
+      },
+      "rank": 18
+    },
+    {
+      "id": "f_019",
+      "source": "semgrep",
+      "rule_id": "dockerfile.security.missing-user.missing-user",
+      "title": "Dockerfile does not drop to a non-root USER",
+      "severity": "high",
+      "cvss": null,
+      "category": "config",
+      "file_path": "demo-app/Dockerfile",
+      "line_start": 20,
+      "line_end": 20,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-250"
+      ],
+      "references": [
+        "https://owasp.org/Top10/A04_2021-Insecure_Design"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "Semgrep independently confirms the Dockerfile has no USER instruction.",
+        "why_it_matters": "Same root-in-container risk Trivy flagged -- confirmed by a second scanner.",
+        "fix": "Add a non-root USER instruction before CMD.",
+        "confidence": "high"
+      },
+      "rank": 19
+    },
+    {
+      "id": "f_020",
+      "source": "semgrep",
+      "rule_id": "python.flask.security.audit.debug-enabled.debug-enabled",
+      "title": "Flask app running with debug=True",
+      "severity": "high",
+      "cvss": null,
+      "category": "config",
+      "file_path": "demo-app/app.py",
+      "line_start": 44,
+      "line_end": 44,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-489"
+      ],
+      "references": [
+        "https://labs.detectify.com/2015/10/02/how-patreon-got-hacked-publicly-exposed-werkzeug-debugger/"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "Flask's `debug=True` leaves the interactive Werkzeug debugger reachable.",
+        "why_it_matters": "The Werkzeug debugger accepts arbitrary Python expressions -- reaching it is remote code execution, not just an info leak.",
+        "fix": "Set debug=False and drive debug mode from an environment variable that defaults to off.",
+        "confidence": "high"
+      },
+      "rank": 20
+    },
+    {
+      "id": "f_021",
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.md5-used-as-password.md5-used-as-password",
+      "title": "MD5 used to hash passwords",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/models/user.py",
+      "line_start": 54,
+      "line_end": 54,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-327"
+      ],
+      "references": [
+        "https://tools.ietf.org/html/rfc6151"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "User passwords are hashed with MD5 instead of a slow, salted KDF.",
+        "why_it_matters": "If the user database is ever read, every password hash can be cracked in bulk with commodity hardware.",
+        "fix": "Rehash with `hashlib.scrypt` or bcrypt, migrating existing hashes on next login.",
+        "confidence": "high"
+      },
+      "rank": 21
+    },
+    {
+      "id": "f_022",
+      "source": "semgrep",
+      "rule_id": "python.django.security.injection.ssrf.ssrf-injection-requests.ssrf-injection-requests",
+      "title": "Server-side request forgery in proxy handler",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/routes/proxy.py",
+      "line_start": 14,
+      "line_end": 22,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-918"
+      ],
+      "references": [
+        "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 16.1,
+      "explanation": {
+        "what": "routes/proxy.py forwards a user-supplied URL directly into an outbound request.",
+        "why_it_matters": "An attacker can make the server issue requests to internal-only services (metadata endpoints, internal APIs) that aren't reachable from outside.",
+        "fix": "Validate the target host/scheme against an allowlist before making the request.",
+        "confidence": "high"
+      },
+      "rank": 22
+    },
+    {
+      "id": "f_023",
+      "source": "semgrep",
+      "rule_id": "python.django.security.injection.ssrf.ssrf-injection-requests.ssrf-injection-requests",
+      "title": "Server-side request forgery in proxy handler",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/routes/proxy.py",
+      "line_start": 48,
+      "line_end": 49,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-918"
+      ],
+      "references": [
+        "https://owasp.org/www-community/attacks/Server_Side_Request_Forgery"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 16.1,
+      "explanation": {
+        "what": "routes/proxy.py forwards a user-supplied URL directly into an outbound request.",
+        "why_it_matters": "An attacker can make the server issue requests to internal-only services (metadata endpoints, internal APIs) that aren't reachable from outside.",
+        "fix": "Validate the target host/scheme against an allowlist before making the request.",
+        "confidence": "high"
+      },
+      "rank": 23
+    },
+    {
+      "id": "f_024",
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+      "title": "subprocess call with shell=True (line 23)",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/services/backup.py",
+      "line_start": 23,
+      "line_end": 23,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "services/backup.py invokes subprocess with shell=True on a constructed command string.",
+        "why_it_matters": "If any part of that command string is influenced by user or config input, this is OS command injection.",
+        "fix": "Call subprocess with a list of arguments and shell=False.",
+        "confidence": "medium"
+      },
+      "rank": 24
+    },
+    {
+      "id": "f_025",
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+      "title": "subprocess call with shell=True (line 32)",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/services/backup.py",
+      "line_start": 32,
+      "line_end": 32,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "services/backup.py invokes subprocess with shell=True on a constructed command string.",
+        "why_it_matters": "If any part of that command string is influenced by user or config input, this is OS command injection.",
+        "fix": "Call subprocess with a list of arguments and shell=False.",
+        "confidence": "medium"
+      },
+      "rank": 25
+    },
+    {
+      "id": "f_026",
+      "source": "semgrep",
+      "rule_id": "python.lang.security.audit.subprocess-shell-true.subprocess-shell-true",
+      "title": "subprocess call with shell=True (line 52)",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/services/backup.py",
+      "line_start": 52,
+      "line_end": 52,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-78"
+      ],
+      "references": [
+        "https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "services/backup.py invokes subprocess with shell=True on a constructed command string.",
+        "why_it_matters": "If any part of that command string is influenced by user or config input, this is OS command injection.",
+        "fix": "Call subprocess with a list of arguments and shell=False.",
+        "confidence": "medium"
+      },
+      "rank": 26
+    },
+    {
+      "id": "f_027",
+      "source": "semgrep",
+      "rule_id": "python.lang.security.deserialization.pickle.avoid-pickle",
+      "title": "Untrusted data passed to pickle.loads",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/services/cache.py",
+      "line_start": 19,
+      "line_end": 19,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-502"
+      ],
+      "references": [
+        "https://docs.python.org/3/library/pickle.html"
+      ],
+      "occurrences": 2,
+      "duplicate_of": null,
+      "score_contribution": 16.1,
+      "explanation": {
+        "what": "services/cache.py unpickles cached data without verifying its origin.",
+        "why_it_matters": "Pickle deserialization of attacker-reachable data is a direct path to code execution inside the process.",
+        "fix": "Switch the cache serialization format to JSON.",
+        "confidence": "medium"
+      },
+      "rank": 27
+    },
+    {
+      "id": "f_028",
+      "source": "semgrep",
+      "rule_id": "python.requests.security.disabled-cert-validation.disabled-cert-validation",
+      "title": "TLS certificate verification disabled",
+      "severity": "high",
+      "cvss": null,
+      "category": "code",
+      "file_path": "demo-app/services/notifications.py",
+      "line_start": 40,
+      "line_end": 40,
+      "package": null,
+      "code_snippet": null,
+      "cwe": [
+        "CWE-295"
+      ],
+      "references": [
+        "https://stackoverflow.com/questions/41740361/is-it-safe-to-disable-ssl-certificate-verification-in-pythonss-requests-lib"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 14.0,
+      "explanation": {
+        "what": "services/notifications.py makes an HTTPS request with verify=False.",
+        "why_it_matters": "This disables TLS certificate checking, so outbound notification traffic is vulnerable to interception.",
+        "fix": "Remove verify=False and, if a custom CA is needed, pass its bundle path instead.",
+        "confidence": "low"
+      },
+      "rank": 28
+    },
+    {
+      "id": "f_029",
+      "source": "trivy",
+      "rule_id": "CVE-2025-27516",
+      "title": "jinja2: Jinja sandbox breakout through attr filter selecting format method",
+      "severity": "medium",
+      "cvss": 8.8,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "jinja2",
+        "installed_version": "2.10",
+        "fixed_version": "3.1.6"
+      },
+      "code_snippet": "jinja2==2.10",
+      "cwe": [
+        "CWE-1336"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2025-27516"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 7.0,
+      "explanation": {
+        "what": "jinja2: Jinja sandbox breakout through attr filter selecting format method in jinja2.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade jinja2 to 3.1.6.",
+        "confidence": "medium"
+      },
+      "rank": 29
+    },
+    {
+      "id": "f_030",
+      "source": "trivy",
+      "rule_id": "CVE-2024-56326",
+      "title": "jinja2: Jinja has a sandbox breakout through indirect reference to format method",
+      "severity": "medium",
+      "cvss": 7.8,
+      "category": "dependency",
+      "file_path": "demo-app/requirements.txt",
+      "line_start": null,
+      "line_end": null,
+      "package": {
+        "name": "jinja2",
+        "installed_version": "2.10",
+        "fixed_version": "3.1.5"
+      },
+      "code_snippet": "jinja2==2.10",
+      "cwe": [
+        "CWE-693",
+        "CWE-1336"
+      ],
+      "references": [
+        "https://avd.aquasec.com/nvd/cve-2024-56326"
+      ],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 7.0,
+      "explanation": {
+        "what": "jinja2: Jinja has a sandbox breakout through indirect reference to format method in jinja2.",
+        "why_it_matters": "A known vulnerability in a dependency this project pins to a version that predates the fix.",
+        "fix": "Upgrade jinja2 to 3.1.5.",
+        "confidence": "medium"
+      },
+      "rank": 30
     }
   ],
   "attack_paths": [
     {
       "id": "ap_001",
-      "title": "Unauthenticated RCE to database credential theft",
+      "title": "Debug console to AWS credential theft",
       "severity": "critical",
       "likelihood": "likely",
-      "narrative": "An attacker posts a crafted payload to the public API, which deserializes it with pickle and executes code inside the container. From there they read config.py, recover the hardcoded PostgreSQL password, and connect directly to the production database.",
+      "narrative": "An attacker reaches the exposed Werkzeug debugger left on by debug=True and runs arbitrary Python in the app process. From there they trigger the backup service's shell=True subprocess call to execute OS commands, then read the hardcoded AWS credentials out of config.py.",
       "steps": [
         {
           "order": 1,
-          "finding_id": "f_001",
-          "label": "Pickle deserialization gives code execution",
-          "technique": "Execution"
+          "finding_id": "f_020",
+          "label": "Werkzeug debugger reachable",
+          "technique": "Initial access"
         },
         {
           "order": 2,
-          "finding_id": "f_002",
-          "label": "Hardcoded DB credential read from disk",
+          "finding_id": "f_024",
+          "label": "shell=True subprocess call escalates to OS commands",
+          "technique": "Execution"
+        },
+        {
+          "order": 3,
+          "finding_id": "f_004",
+          "label": "Hardcoded AWS key read from disk",
           "technique": "Credential access"
         }
       ],
-      "edges": [{ "from": "f_001", "to": "f_002" }]
+      "edges": [
+        {
+          "from": "f_020",
+          "to": "f_024"
+        },
+        {
+          "from": "f_024",
+          "to": "f_004"
+        }
+      ]
+    },
+    {
+      "id": "ap_002",
+      "title": "Unauthenticated SQL injection to credential cracking",
+      "severity": "high",
+      "likelihood": "likely",
+      "narrative": "The unauthenticated users endpoint is vulnerable to SQL injection, letting an attacker dump the full user table. Because passwords are hashed with MD5 rather than a slow KDF, the dumped hashes can be cracked in bulk, handing the attacker working account credentials.",
+      "steps": [
+        {
+          "order": 1,
+          "finding_id": "f_006",
+          "label": "SQL injection dumps user table",
+          "technique": "Initial access"
+        },
+        {
+          "order": 2,
+          "finding_id": "f_021",
+          "label": "MD5 password hashes cracked offline",
+          "technique": "Credential access"
+        }
+      ],
+      "edges": [
+        {
+          "from": "f_006",
+          "to": "f_021"
+        }
+      ]
+    },
+    {
+      "id": "ap_003",
+      "title": "SSRF into internal cache to code execution",
+      "severity": "high",
+      "likelihood": "possible",
+      "narrative": "The public proxy endpoint's SSRF flaw lets an attacker reach the internal cache service directly. By writing a crafted pickle payload into that cache, the attacker gets code execution when it's later unpickled, and from there reads the AWS secret key hardcoded in config.py.",
+      "steps": [
+        {
+          "order": 1,
+          "finding_id": "f_022",
+          "label": "SSRF reaches internal cache service",
+          "technique": "Initial access"
+        },
+        {
+          "order": 2,
+          "finding_id": "f_027",
+          "label": "Malicious pickle payload executes on unpickle",
+          "technique": "Execution"
+        },
+        {
+          "order": 3,
+          "finding_id": "f_005",
+          "label": "AWS secret key read from disk",
+          "technique": "Credential access"
+        }
+      ],
+      "edges": [
+        {
+          "from": "f_022",
+          "to": "f_027"
+        },
+        {
+          "from": "f_027",
+          "to": "f_005"
+        }
+      ]
     }
   ],
   "errors": []
