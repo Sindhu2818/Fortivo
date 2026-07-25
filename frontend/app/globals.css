@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Design tokens. Values come from docs/frontend-refs/design-tokens.md — do not
+ * improvise substitutes here.
+ *
+ * tailwind.config.ts reads every token as hsl(var(--token)), so these are bare
+ * HSL channels: no hsl() wrapper, no hex. Dark is the theme the app ships in;
+ * app/layout.tsx pins `class="dark"` on <html>.
+ */
+@layer base {
+  :root {
+    /* Light — defined for completeness; the app runs in .dark. */
+    --background: 189 70% 96%;
+    --foreground: 193 69% 5%;
+    --primary: 194 72% 52%;
+    --primary-foreground: 189 70% 96%;
+    --secondary: 225 72% 73%;
+    --secondary-foreground: 193 69% 5%;
+    --accent: 281 63% 82%;
+    --accent-foreground: 193 69% 5%;
+
+    /* Surfaces: steps of the background hue, not new colours. */
+    --card: 189 45% 99%;
+    --card-foreground: 193 69% 5%;
+    --popover: 189 45% 99%;
+    --popover-foreground: 193 69% 5%;
+    --muted: 189 35% 91%;
+    --muted-foreground: 193 20% 35%;
+    --border: 189 30% 85%;
+    --input: 189 30% 85%;
+    --ring: 194 72% 52%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 189 70% 4%;
+    --foreground: 193 69% 95%;
+    --primary: 194 78% 52%;
+    --primary-foreground: 189 70% 4%;
+    --secondary: 225 23% 90%;
+    --secondary-foreground: 189 70% 4%;
+    --accent: 282 48% 70%;
+    --accent-foreground: 189 70% 4%;
+
+    --card: 189 45% 7%;
+    --card-foreground: 193 69% 95%;
+    --popover: 189 45% 7%;
+    --popover-foreground: 193 69% 95%;
+    --muted: 189 30% 13%;
+    --muted-foreground: 193 20% 65%;
+    --border: 189 30% 15%;
+    --input: 189 30% 15%;
+    --ring: 194 78% 52%;
+  }
+
+  /**
+   * Severity ramp. Same values in both themes — a critical finding is the same
+   * red either way. Per docs/frontend-refs/collisions.md red / orange / amber /
+   * grey belong to severity and to nothing else in the app; `--destructive` is
+   * an alias of critical so shadcn's destructive variants stay on the ramp
+   * instead of introducing a sixth red.
+   */
+  :root,
+  .dark {
+    --severity-critical: 358 75% 59%;
+    --severity-high: 28 87% 62%;
+    --severity-medium: 46 77% 60%;
+    --severity-low: 202 11% 47%;
+    --severity-info: 204 14% 32%;
+
+    --destructive: 358 75% 59%;
+
+    /* Fonts are still TODO in design-tokens.md — neutral stacks until then. */
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Dark by default: keeps scrollbars and form controls dark too. */
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
