@@ -9,7 +9,7 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 
 ## Right now
 
-| | Charvitha (Fedora — backend) | Sindhu (Windows — frontend) |
+| | Sindhu (Windows + WSL — backend) | Charvitha (Fedora — frontend) |
 |---|---|---|
 | **Doing** | — | — |
 | **Next** | Task 1 — capture real scanner fixtures | Task 9 — Next.js scaffold + DEMO_MODE |
@@ -21,15 +21,16 @@ Nothing is done yet. The tree exists; all code files are stubs.
 
 ## One-time setup (do this first, both of you)
 
-**Charvitha (Fedora):**
+**Sindhu (Windows + WSL) — do all of this inside WSL, not in Windows-native Python:**
+- [ ] WSL2 with a Linux distro installed, repo cloned/accessible from inside it
 - [ ] `python3.11 -m venv .venv && source .venv/bin/activate`
 - [ ] `pip install -r backend/requirements.txt`
-- [ ] Install Trivy (`sudo dnf install trivy`, or the official install script)
+- [ ] Install Trivy (the official install script, or your distro's package manager)
 - [ ] Install Semgrep (`pip install semgrep` — same venv is fine)
 - [ ] `cp .env.example .env`, paste a real `GEMINI_API_KEY`
-- [ ] Confirm `trivy --version` and `semgrep --version` both work
+- [ ] Confirm `trivy --version` and `semgrep --version` both work **in the WSL shell**
 
-**Sindhu (Windows):**
+**Charvitha (Fedora):**
 - [ ] Node 20 LTS installed
 - [ ] `cp .env.example frontend/.env.local` (keep `NEXT_PUBLIC_DEMO_MODE=true`)
 - [ ] You do **not** need Trivy, Semgrep, Python, or a running backend. Everything
@@ -39,8 +40,8 @@ Nothing is done yet. The tree exists; all code files are stubs.
 
 ## Pending work, in dependency order
 
-### Charvitha — backend chain
-- [ ] **1. Fixtures** — real Trivy + Semgrep JSON in `/fixtures`. *Unblocks everything, including Sindhu's realistic mock data. Do this first.*
+### Sindhu — backend chain
+- [ ] **1. Fixtures** — real Trivy + Semgrep JSON in `/fixtures`. *Unblocks everything, including Charvitha's realistic mock data. Do this first.*
 - [x] **2. Demo app** — the vulnerable repo the whole demo scans
 - [ ] **3. Scan endpoint + normalizer**
 - [ ] **4. Reduction** — dedup + rank to 30
@@ -51,7 +52,7 @@ Nothing is done yet. The tree exists; all code files are stubs.
 - [ ] **16. Golden run**
 - [ ] **18. DECISIONS.md**
 
-### Sindhu — frontend chain
+### Charvitha — frontend chain
 - [ ] **9. Scaffold + DEMO_MODE** — *can start immediately, no backend needed*
 - [ ] **10. Scan page**
 - [ ] **11. Dashboard** — risk gauge, breakdown, stats, findings table
@@ -62,20 +63,22 @@ Nothing is done yet. The tree exists; all code files are stubs.
 - [ ] **19. Pitch**
 
 ### Together
-- [ ] **15. Integration** — must happen on Charvitha's Fedora machine. Sindhu pulls,
-      sets `NEXT_PUBLIC_DEMO_MODE=false`, points at `http://localhost:8000`.
+- [ ] **15. Integration** — must happen on Sindhu's machine, since it's the only one
+      that can run the scanners. Backend runs inside WSL; start the frontend from the
+      **same WSL shell** so `http://localhost:8000` resolves. Pull latest, set
+      `NEXT_PUBLIC_DEMO_MODE=false`.
 
 ---
 
 ## The one hard sync point
 
-Sindhu's work is only as good as `fixtures/mock_results.json`. The stub version in
+Charvitha's work is only as good as `fixtures/mock_results.json`. The stub version in
 the repo has **3 findings and 1 attack path** — enough to compile against, not enough
 to reveal layout problems.
 
-**Charvitha: after Task 1, replace it with a realistic 30-finding, 3-attack-path
-document and tell Sindhu it landed.** Until then Sindhu should build for volume she
-can't yet see: assume 30 rows, long titles, 4-step paths, and `explanation: null`.
+**Sindhu: after Task 1, replace it with a realistic 30-finding, 3-attack-path
+document and tell Charvitha it landed.** Until then Charvitha should build for volume
+she can't yet see: assume 30 rows, long titles, 4-step paths, and `explanation: null`.
 
 Everything else is decoupled. The contract is frozen, so neither side waits on the
 other for shape — only for realism.
@@ -86,7 +89,14 @@ other for shape — only for realism.
 
 *Write it here instead of reaching into the other person's tree.*
 
-- (nothing yet)
+- **Frontend deps are pre-approved but NOT installed.** Charvitha approved the full
+  list on 2026-07-25 and it is now frozen in `CLAUDE.md`. They could not be installed
+  from a backend session: `frontend/` has no `package.json` yet (Task 9 unstarted), and
+  `create-next-app` refuses to scaffold into a directory that already has one.
+  **Charvitha — after the Task 9 scaffold, run these two and no approval turn is needed:**
+  `npm i motion clsx tailwind-merge lucide-react @xyflow/react`
+  `npx motion-primitives@latest add text-effect` (needs Tailwind + `components.json`
+  + `lib/utils.ts` `cn()` in place first, i.e. run `shadcn init` before it).
 
 ---
 

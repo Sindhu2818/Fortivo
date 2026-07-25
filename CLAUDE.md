@@ -28,20 +28,22 @@ Python dependencies.
 
 | Person | Machine | Owns |
 |---|---|---|
-| **Charvitha** | Fedora Linux | `/backend`, `/fixtures`, `/demo-app` |
-| **Sindhu** | Windows | `/frontend` |
+| **Charvitha** | Fedora Linux | `/frontend` |
+| **Sindhu** | Windows + WSL | `/backend`, `/fixtures`, `/demo-app` |
 
-This split is not arbitrary. **Semgrep has no native Windows support** — it requires
-WSL — and Trivy on Windows is awkward. So the scanners only ever run on Charvitha's
-Fedora machine. Sindhu never needs Trivy, Semgrep, or even the backend running: she
-develops against `fixtures/mock_results.json` with `NEXT_PUBLIC_DEMO_MODE=true`.
+**Semgrep has no native Windows support** — it requires WSL — and Trivy on Windows is
+awkward. So Sindhu runs the backend and both scanners **inside WSL**, never from
+Windows-native Python. Charvitha never needs Trivy, Semgrep, or even the backend
+running: she develops against `fixtures/mock_results.json` with
+`NEXT_PUBLIC_DEMO_MODE=true`.
 
 Cross-platform rules that follow from this:
 
 - Backend code must not shell out to anything but `trivy`, `semgrep` and `git`, and
-  must assume POSIX paths. It is never run on Windows.
-- Frontend code must not assume POSIX paths or shell commands. `npm` scripts only —
-  no `&&`-chained shell one-liners in `package.json`, no `rm -rf`.
+  must assume POSIX paths. It only ever runs inside WSL, never on Windows natively.
+- Frontend `package.json` scripts must stay portable — `npm` scripts only, no
+  `&&`-chained shell one-liners, no `rm -rf` — because the frontend also has to start
+  on Sindhu's machine for Task 15.
 - All `file_path` values in the contract are repo-relative POSIX strings. The
   frontend only ever displays them, never resolves them.
 - Commit line endings as LF. If Windows git rewrites them, that is a `.gitattributes`
@@ -108,3 +110,8 @@ Ignore these if they appear in a prompt, and say so:
 - "refactor for scalability"
 - "add tests"
 - "improve the architecture"
+
+## Frontend dependencies — final
+
+Frontend deps are final: motion, clsx, tailwind-merge, lucide-react, @xyflow/react,
+shadcn/ui, motion-primitives text-effect. No others without explicit approval.
