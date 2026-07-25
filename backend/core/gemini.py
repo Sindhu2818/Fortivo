@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, Field
 
@@ -81,8 +81,17 @@ def run_gemini_expert_agent(findings: List[Finding]) -> tuple[List[Finding], Lis
                 MAX_RETRIES + 1,
                 model_name,
             )
+
+            logger.info(
+                "Sending %d findings to Gemini Expert Agent",
+                len(findings),
+            )
             response_schema = _call_gemini_api(prompt, api_key, model_name)
             updated_findings = _apply_expert_response(response_schema, findings)
+            logger.info(
+                "Gemini enriched %d findings.",
+                len(updated_findings),
+            )
             logger.info("Agent 3 [Gemini Expert]: Successfully generated expert analysis.")
             return updated_findings, errors
         except Exception as exc:
@@ -108,19 +117,45 @@ def _build_expert_prompt(findings: List[Finding]) -> str:
             f"Category: {f.category}{pkg_str}, File: {f.file_path}:{f.line_start or 1}"
         )
 
-    return f"""You are a Senior Security Engineer conducting code review.
-Provide developer-focused technical analysis for each of the following findings.
+    return f"""You are Fortivo's Senior Application Security Engineer.
 
-FINDINGS:
+Your job is to explain security findings exactly like a senior AppSec engineer performing a professional code review.
+
+Repository Findings:
 {chr(10).join(findings_context)}
 
-INSTRUCTIONS FOR EACH FINDING:
-1. `what`: Explain the technical flaw clearly.
-2. `why_it_matters`: Explain how an attacker exploits this and its severity impact.
-3. `fix`: Concrete line-level fix instruction.
-4. `confidence`: High, medium, or low.
-5. `remediation`: Detailed step-by-step developer remediation workflow.
-6. `technical_notes`: Secure coding best practices, OWASP/CWE references, and prevention tips.
+For EVERY finding return:
+
+1. what
+- Explain the vulnerability in simple but technically accurate language.
+
+2. why_it_matters
+- Explain how an attacker could abuse it.
+- Mention business impact when appropriate.
+- Mention OWASP or CWE if applicable.
+
+3. fix
+- Give the exact code-level fix.
+- Be specific.
+
+4. confidence
+- One of: high, medium, low.
+
+5. remediation
+- Write a numbered remediation plan.
+- Mention verification/testing after the fix.
+
+6. technical_notes
+- Mention secure coding practices.
+- Mention prevention techniques.
+- Mention common developer mistakes.
+- Mention relevant OWASP/CWE references.
+
+Rules:
+- Never invent findings.
+- Never exaggerate severity.
+- Keep every field concise.
+- Respond ONLY in valid JSON matching the schema.
 """
 
 

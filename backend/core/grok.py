@@ -19,11 +19,10 @@ Resilience:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
-from typing import List, Optional
+from typing import List
 
 import requests
 from pydantic import BaseModel, Field
@@ -86,6 +85,11 @@ def run_grok_advisor_agent(
                 MAX_RETRIES + 1,
                 model_name,
             )
+            logger.info(
+                "Sending %d findings and %d attack paths to Grok Advisor Agent.",
+                len(findings),
+                len(attack_paths),
+            )
             advisor_res = _call_grok_api(prompt, api_key, model_name)
             updated_risk = risk.model_copy(
                 update={
@@ -95,6 +99,11 @@ def run_grok_advisor_agent(
                         rec.strip() for rec in advisor_res.recommendations if rec.strip()
                     ],
                 }
+            )
+            logger.info(
+                "Grok generated %d key risks and %d recommendations.",
+                len(updated_risk.key_risks),
+                len(updated_risk.recommendations),
             )
             logger.info("Agent 4 [Grok Advisor]: Successfully generated executive assessment.")
             return updated_risk, errors
@@ -127,25 +136,55 @@ def _build_advisor_prompt(
         for ap in attack_paths
     )
 
-    return f"""You are a Chief Information Security Officer (CISO) delivering an executive briefing to engineering managers and hackathon judges.
+    return f"""You are the Chief Information Security Officer (CISO) of a cybersecurity consulting firm.
 
-SECURITY ASSESSMENT REPORT CONTEXT:
-- Risk Score: {risk.score}/100 ({risk.band.upper()} band)
-- Severity Component: {risk.components.severity}/100
-- Exploitability Component: {risk.components.exploitability}/100
-- Exposure Component: {risk.components.exposure}/100
-- Blast Radius Component: {risk.components.blast_radius}/100
+Your audience consists of:
+- Engineering Managers
+- CTOs
+- Startup Founders
+- Hackathon Judges
 
-TOP VULNERABILITIES ({len(findings)} total reported):
-{findings_str or 'No critical findings.'}
+Repository Security Summary
 
-ATTACK PATHS ({len(attack_paths)} identified):
-{paths_str or 'No attack paths.'}
+Overall Risk Score:
+- {risk.score}/100
+- Risk Band: {risk.band.upper()}
 
-PROVIDE A JSON RESPONSE WITH THE FOLLOWING STRUCTURE:
-1. `executive_summary`: A clear, compelling 2-3 sentence executive overview in professional business language explaining the organization's risk posture.
-2. `key_risks`: A list of 3-5 high-priority business and security risks highlighted by this scan.
-3. `recommendations`: A list of 3-5 strategic next steps for the management team to reduce risk effectively.
+Risk Components:
+- Severity: {risk.components.severity}/100
+- Exploitability: {risk.components.exploitability}/100
+- Exposure: {risk.components.exposure}/100
+- Blast Radius: {risk.components.blast_radius}/100
+
+Top Findings:
+{findings_str or "No major findings detected."}
+
+Attack Paths:
+{paths_str or "No attack paths generated."}
+
+Generate JSON only.
+
+executive_summary
+- Write 2–3 professional paragraphs.
+- Explain the overall security posture.
+- Mention the most important risks.
+- Mention potential business impact.
+- Avoid unnecessary technical jargon.
+
+key_risks
+- Return 3–5 concise bullet-style statements.
+- Prioritize the most important security risks.
+
+recommendations
+- Return 3–5 actionable recommendations.
+- Order them by priority.
+- Include both immediate fixes and long-term improvements.
+
+Rules
+- Never invent vulnerabilities.
+- Base everything only on the supplied findings.
+- Keep the tone professional.
+- Return ONLY valid JSON.
 """
 
 
@@ -161,7 +200,11 @@ def _call_grok_api(
         "messages": [
             {
                 "role": "system",
-                "content": "You are an expert CISO and Executive Security Advisor. Respond strictly in valid JSON.",
+                "content": (
+    "You are an experienced Chief Information Security Officer (CISO). "
+    "Always return valid JSON matching the requested schema. "
+    "Do not include markdown, code fences, or additional text."
+),
             },
             {"role": "user", "content": prompt},
         ],
@@ -194,17 +237,29 @@ def _call_grok_api(
 
 
 def _apply_fallback_advisor(risk: Risk, findings: List[Finding]) -> Risk:
-    exec_summary = (
-        f"Executive Briefing: Repository risk score evaluated at {risk.score}/100 ({risk.band} severity band). "
-        f"The security posture requires attention across {len(findings)} identified findings."
+    high_count = sum(
+        1 for f in findings if f.severity in ("critical", "high")
     )
+
+    exec_summary = (
+        f"The repository received an overall security score of {risk.score}/100 "
+        f"({risk.band.upper()} risk). "
+        f"The scan identified {len(findings)} findings, including "
+        f"{high_count} high or critical vulnerabilities requiring priority attention. "
+        f"Addressing these issues will significantly improve the application's security posture."
+    )
+
     key_risks = [
-        f"Overall security score is {risk.score}/100 in the {risk.band} band.",
-        f"{len([f for f in findings if f.severity in ('critical', 'high')])} high/critical vulnerabilities identified.",
+        f"{high_count} high or critical findings require immediate remediation.",
+        "Unresolved vulnerabilities could increase the application's attack surface.",
+        "Security weaknesses may impact confidentiality, integrity, and availability.",
     ]
+
     recommendations = [
-        "Prioritize remediation of critical and high-severity findings.",
-        "Implement automated CI/CD security scanning to catch vulnerabilities early.",
+        "Remediate all Critical and High severity findings first.",
+        "Integrate automated security scanning into the CI/CD pipeline.",
+        "Perform periodic dependency updates and vulnerability reviews.",
+        "Conduct regular secure code reviews before production releases.",
     ]
 
     return risk.model_copy(
