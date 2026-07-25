@@ -60,7 +60,7 @@ export function ScanInput() {
           placeholder="https://github.com/org/repo or ./local-path"
           disabled={submitting}
           aria-label="Repository URL or local path"
-          className="h-12 flex-1 rounded-lg border border-border bg-card px-4 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary/60 focus:outline-none disabled:opacity-60"
+          className="h-12 flex-1 rounded-lg border border-border bg-card px-4 font-mono text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border/80 focus-visible:border-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <Button type="submit" size="lg" disabled={submitting} className="h-12 shrink-0">
           {submitting ? (

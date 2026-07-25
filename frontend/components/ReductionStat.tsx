@@ -61,7 +61,7 @@ export function ReductionStat({ stats }: ReductionStatProps) {
         })}
       </div>
 
-      <div className="mt-auto border-t border-border pt-5">
+      <div className="mt-auto border-t border-border pt-4">
         <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
           By severity
         </p>

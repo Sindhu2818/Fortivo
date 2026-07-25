@@ -26,7 +26,7 @@ export function StatsBar({ stats }: StatsBarProps) {
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
-      <p className="mb-5 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+      <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
         Signal, not noise
       </p>
 
@@ -59,7 +59,7 @@ export function StatsBar({ stats }: StatsBarProps) {
         })}
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-6 border-t border-border pt-5 sm:grid-cols-2">
+      <div className="mt-6 grid grid-cols-2 gap-6 border-t border-border pt-4">
         <div>
           <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground/70">By severity</p>
           <div className="flex flex-wrap gap-2">

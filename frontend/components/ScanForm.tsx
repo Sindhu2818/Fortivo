@@ -47,9 +47,10 @@ export function ScanForm({ onSubmit, submitting }: ScanFormProps) {
           }}
           placeholder="https://github.com/org/repo or ./local-path"
           disabled={submitting}
-          className="h-12 flex-1 rounded-lg border border-border bg-card px-4 font-mono text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary/60 disabled:opacity-60"
+          aria-label="Repository URL or local path"
+          className="h-12 flex-1 rounded-lg border border-border bg-card px-4 font-mono text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border/80 focus-visible:border-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <Button type="submit" size="lg" disabled={submitting} className="shrink-0">
+        <Button type="submit" size="lg" disabled={submitting} className="h-12 shrink-0">
           {submitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" /> Scanning…
@@ -73,7 +74,7 @@ export function ScanForm({ onSubmit, submitting }: ScanFormProps) {
           setError(null)
           onSubmit(DEMO_REPO_URL)
         }}
-        className="w-fit text-xs text-muted-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
+        className="w-fit rounded text-xs text-muted-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-primary hover:decoration-solid disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
       >
         Use the demo repo ({DEMO_REPO_URL}) instead
       </button>

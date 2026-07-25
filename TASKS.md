@@ -27,7 +27,7 @@ For the at-a-glance view, see `STATUS.md`.
 | 11 | Dashboard | C | done | dashboard renders findings |
 | 12 | Finding drawer | C | done | drawer opens correctly |
 | 13 | Attack graph | C | done | graph renders |
-| 14 | Polish | C | todo | responsive, no console errors |
+| 14 | Polish | C | done | responsive, no console errors |
 | 15 | Integration | C+S | todo | frontend works with live backend |
 | 16 | Golden run | S | todo | `results/golden.json` exists |
 | 17 | Video | C | todo | walkthrough recorded |

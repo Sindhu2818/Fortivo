@@ -89,11 +89,14 @@ export function AttackPathNode({ data }: NodeProps<AttackStepNode>) {
     <>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} isConnectable={false} />
 
+      {/* Keyboard focus is React Flow's: it puts the tabindex on .react-flow__node,
+          which wraps this card exactly, so globals.css's generic [tabindex] outline
+          already lands in the right place. Only hover is ours. */}
       <div
         style={{ width: NODE_WIDTH, borderColor: kind.hex }}
         className={cn(
-          'rounded-lg border bg-card px-3 py-2.5 text-left transition-colors',
-          clickable ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default'
+          'rounded-lg border bg-card px-3 py-3 text-left transition-all',
+          clickable ? 'cursor-pointer hover:bg-muted hover:shadow-lg hover:shadow-black/30' : 'cursor-default'
         )}
       >
         <div className="flex items-center gap-1.5">

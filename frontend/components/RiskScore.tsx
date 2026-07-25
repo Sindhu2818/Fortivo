@@ -28,7 +28,9 @@ export function RiskScore({ risk }: RiskScoreProps) {
   const progress = (risk.score / 100) * arcLength
 
   return (
-    <div className="flex flex-col gap-6 rounded-xl border border-border bg-card p-6 sm:flex-row sm:items-center">
+    /* h-full so it fills its grid cell — at 1440x900 the ScoreBreakdown beside it
+       is the taller card, and without this the two bottom edges do not line up. */
+    <div className="flex h-full flex-col gap-6 rounded-xl border border-border bg-card p-6 sm:flex-row sm:items-center">
       <div className="relative mx-auto h-[200px] w-[200px] shrink-0">
         <svg viewBox="0 0 200 200" className="h-full w-full -rotate-[135deg]">
           <circle

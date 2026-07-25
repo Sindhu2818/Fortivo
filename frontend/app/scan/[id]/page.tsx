@@ -7,21 +7,23 @@
  * is the dashboard — RiskGauge and ReductionStat in a header row, FindingsTable
  * below. It holds the selected-finding id that B4's drawer will consume.
  *
+ * The failed state is ErrorState, shared with /dashboard/[scanId] so both routes
+ * fail the same way. Its Retry bumps `retryKey`, which re-enters the polling
+ * effect from the top; the poll itself is unchanged.
+ *
  * DoD: with DEMO_MODE on, opening this page walks the six stages, collapses the
  * counter at the reducing stage, and swaps in the dashboard afterwards.
  */
 
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { AlertTriangle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ErrorState } from '@/components/ErrorState'
 import { FindingDrawer } from '@/components/FindingDrawer'
 import { FindingsTable } from '@/components/FindingsTable'
 import { ProgressStages } from '@/components/ProgressStages'
 import { ReductionStat } from '@/components/ReductionStat'
 import { RiskGauge } from '@/components/RiskGauge'
-import { Button } from '@/components/ui/button'
 import { getResults, getStatus } from '@/lib/api'
 import type { ScanCounts, ScanProgress, ScanResult } from '@/lib/types'
 
@@ -39,6 +41,8 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
   const [showResult, setShowResult] = useState(false)
   // Selected row; FindingDrawer consumes it.
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** Bumped by ErrorState's Retry. Its only job is to re-run the effect below. */
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -72,7 +76,13 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [scanId])
+  }, [scanId, retryKey])
+
+  const retry = useCallback(() => {
+    setProgress(null)
+    setError(null)
+    setRetryKey((k) => k + 1)
+  }, [])
 
   // Hold on the collapsed counter for a beat before the dashboard takes over —
   // this also covers a backend fast enough that we never polled mid-reduction,
@@ -96,30 +106,18 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
 
   if (error) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-16">
+      <div className="mx-auto max-w-2xl px-6 py-10">
         <Header scanId={scanId} />
-        {/* Not red: collisions.md reserves the severity ramp's colours for severity. */}
-        <div className="mt-8 rounded-2xl border border-border bg-card p-8">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-foreground">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-base font-medium text-foreground">Scan failed</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <p className="mt-3 font-mono text-xs text-muted-foreground/70">
-                {scanId} · stopped at {stage}
-              </p>
-            </div>
-          </div>
-          <div className="mt-6">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/">Try another repository</Link>
-            </Button>
-          </div>
-        </div>
+        <ErrorState
+          title="Scan failed"
+          message={error}
+          detail={`${scanId} · stopped at ${stage}`}
+          onRetry={retry}
+          retryLabel="Retry scan"
+          className="mt-8"
+        />
 
-        <div className="mt-6 opacity-60">
+        <div className="mt-8 opacity-60">
           <ProgressStages stage={stage} counts={counts} failed />
         </div>
       </div>
@@ -128,20 +126,20 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
 
   if (result && showResult) {
     return (
-      <div className="mx-auto max-w-6xl px-6 py-12">
+      <div className="mx-auto max-w-6xl px-6 py-10">
         <Header scanId={scanId} repoName={result.repo_name} />
 
         {/* Header row: the score on the left, the reduction story on the right. */}
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
-          <div className="flex items-center justify-center rounded-2xl border border-border bg-card p-8 lg:col-span-2">
+          <div className="flex items-center justify-center rounded-xl border border-border bg-card p-6 lg:col-span-2">
             <RiskGauge score={result.risk.score} />
           </div>
-          <div className="rounded-2xl border border-border bg-card p-8 lg:col-span-3">
+          <div className="rounded-xl border border-border bg-card p-6 lg:col-span-3">
             <ReductionStat stats={result.stats} />
           </div>
         </div>
 
-        <div className="mt-10">
+        <div className="mt-8">
           <h2 className="mb-4 text-lg font-semibold text-foreground">
             Ranked findings{' '}
             <span className="text-muted-foreground/70">({result.findings.length})</span>
@@ -163,7 +161,7 @@ export default function ScanProgressPage({ params }: { params: { id: string } })
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16">
+    <div className="mx-auto max-w-2xl px-6 py-10">
       <Header scanId={scanId} />
       <div className="mt-8">
         <ProgressStages stage={stage} counts={counts} />

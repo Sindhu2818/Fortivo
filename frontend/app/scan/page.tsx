@@ -64,7 +64,7 @@ export default function ScanPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16">
+    <div className="mx-auto max-w-2xl px-6 py-10">
       <h1 className="text-2xl font-semibold text-foreground">Scan a repository</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Point Fortivo at a Git URL or a local path. It runs Trivy and Semgrep, then
@@ -84,7 +84,8 @@ export default function ScanPage() {
 
       {submitting && (
         <div className="mt-8 rounded-xl border border-border bg-card p-6">
-          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="mb-4 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground" role="status">
+
             Scan in progress
           </p>
           <div className="flex flex-col gap-3">

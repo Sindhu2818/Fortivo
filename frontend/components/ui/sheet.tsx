@@ -27,7 +27,7 @@ export function SheetContent({
         {...props}
       >
         {children}
-        <Dialog.Close className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <Dialog.Close className="absolute right-4 top-4 rounded-md border border-transparent p-2 text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </Dialog.Close>

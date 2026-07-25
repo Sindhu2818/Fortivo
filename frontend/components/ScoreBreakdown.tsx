@@ -92,7 +92,7 @@ export function ScoreBreakdown({
 
   return (
     <div className={cn('rounded-xl border border-border bg-card p-6', className)}>
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             Scoring model
@@ -109,7 +109,7 @@ export function ScoreBreakdown({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-4">
         {FACTORS.map(({ key, label, weight, hint }) => {
           const value = clamp100(components?.[key])
           const max = weight * 100
@@ -152,7 +152,7 @@ export function ScoreBreakdown({
       </div>
 
       {showContribution && (
-        <div className="mt-5 border-t border-border pt-4">
+        <div className="mt-4 border-t border-border pt-4">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-xs text-muted-foreground">This finding contributed</span>
             <span className="shrink-0 font-mono text-sm tabular-nums text-foreground">

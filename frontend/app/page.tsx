@@ -34,7 +34,7 @@ export default async function LandingPage() {
   const scans = await listResults().catch(() => [])
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-20">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <section className="flex flex-col items-start gap-6">
         <span
           className={`${EYEBROW} rounded-full border border-border px-3 py-1 text-primary`}
@@ -56,7 +56,7 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <section className="mt-20">
+      <section className="mt-12">
         <div className="mb-4 flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground/70" />
           <h2 className={EYEBROW}>Recent scans</h2>
@@ -75,10 +75,12 @@ export default async function LandingPage() {
                 <Link
                   key={scan.scan_id}
                   href={`/scan/${scan.scan_id}`}
-                  className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 transition-colors hover:bg-muted"
+                  className="group flex items-center gap-4 rounded-xl border border-border bg-card px-6 py-4 transition-colors hover:border-primary/40 hover:bg-muted"
                 >
                   <div className="flex-1">
-                    <p className="font-medium text-foreground">{scan.repo_name}</p>
+                    <p className="font-medium text-foreground transition-colors group-hover:text-primary">
+                      {scan.repo_name}
+                    </p>
                     <p className="font-mono text-xs text-muted-foreground/70">
                       {formatDate(scan.scanned_at)}
                     </p>

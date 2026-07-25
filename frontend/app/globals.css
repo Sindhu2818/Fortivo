@@ -82,6 +82,30 @@
   }
 }
 
+/**
+ * Spacing scale — the only step values the app uses.
+ *
+ * Tailwind's default scale is far too fine-grained to stay consistent by eye, so
+ * B6's audit narrowed it to these. Anything outside the list is a mismatch:
+ *
+ *   layout gaps / padding   1  2  3  4  6  8  10  12   (4 8 12 16 24 32 40 48px)
+ *   inside pills & chips    0.5  1  1.5  2  2.5        (2 4 6 8 10px)
+ *
+ * Applied as:
+ *   page shell        mx-auto max-w-6xl px-6 py-10   (narrow pages: max-w-2xl)
+ *   top-level card    rounded-xl  p-6
+ *   band inside card  px-6 py-4
+ *   nested panel      rounded-lg  p-4
+ *   table row gutter  pl-6 / pr-6   (lines the # column up with card content)
+ *   between sections  mt-8   ·   heading to its content  mb-4
+ *   grid / flex gap   gap-6  (tight rows: gap-3)
+ *
+ * Removed by the audit: p-8 and rounded-2xl cards (now p-6 / rounded-xl), py-16
+ * and py-20 page shells, mb-5 / pt-5 / mt-5, gap-3.5, py-14, p-5, pl-5 / pr-5 and
+ * the drawer's pt-14. The one deliberate exception is layout.tsx's `pt-16`, which
+ * is not spacing — it is the offset that pays back the fixed header's `h-16`.
+ */
+
 @layer base {
   * {
     @apply border-border;
@@ -95,6 +119,43 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+  }
+
+  /**
+   * One keyboard-focus treatment for the whole app.
+   *
+   * `outline` rather than a ring utility so it never shifts layout, and it works
+   * on <tr>, which cannot take a box-shadow ring reliably. Wrapped in :where() so
+   * it carries zero specificity — any component that needs its own focus visual
+   * just overrides it, no !important anywhere.
+   *
+   * Nothing in the app may use `focus-visible:outline-none` without replacing the
+   * indicator; ui/button.tsx used to and that left the primary CTA with no focus
+   * state at all.
+   */
+  :where(
+      a[href],
+      button,
+      input,
+      select,
+      textarea,
+      summary,
+      [role='tab'],
+      [role='button'],
+      [tabindex]:not([tabindex='-1'])
+    ):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /**
+   * React Flow puts the tabindex on .react-flow__node, which wraps the step card
+   * exactly, so the [tabindex] rule above already outlines the right box. It also
+   * draws a plain `:focus` outline of its own on mouse-down — kill that one only,
+   * so clicking a node does not leave a ring behind after the drawer opens.
+   */
+  .react-flow__node:focus:not(:focus-visible) {
+    outline: none;
   }
 }
 

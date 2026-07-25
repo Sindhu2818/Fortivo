@@ -6,22 +6,27 @@
  * Owns the selected-finding state that the table and graph both drive and the
  * drawer consumes. No fetching logic of its own beyond the one call.
  *
+ * Three states, in the order they are checked: failed -> ErrorState with Retry,
+ * in flight -> DashboardSkeleton, loaded -> the dashboard. `reloadKey` exists
+ * only so Retry can re-enter the same effect; the fetch itself is unchanged.
+ *
  * DoD: renders the risk score, the four components, up to 30 ranked findings,
  * and the attack graph for a given scan_id.
  */
 
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { RiskScore } from '@/components/RiskScore'
 import { ScoreBreakdown } from '@/components/ScoreBreakdown'
 import { StatsBar } from '@/components/StatsBar'
 import { AttackPathGraph } from '@/components/AttackPathGraph'
 import { FindingsTable } from '@/components/FindingsTable'
 import { FindingDrawer } from '@/components/FindingDrawer'
-import { EmptyState } from '@/components/EmptyState'
+import { DashboardSkeleton } from '@/components/DashboardSkeleton'
+import { ErrorState } from '@/components/ErrorState'
 import { getResult } from '@/lib/api'
 import type { ScanResult } from '@/lib/types'
 
@@ -29,6 +34,8 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** Bumped by Retry. Its only job is to re-run the effect below. */
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -44,7 +51,9 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
     return () => {
       cancelled = true
     }
-  }, [params.scanId])
+  }, [params.scanId, reloadKey])
+
+  const retry = useCallback(() => setReloadKey((k) => k + 1), [])
 
   const findingsById = useMemo(() => {
     const map: Record<string, ScanResult['findings'][number]> = {}
@@ -58,38 +67,28 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
 
   if (error) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-16">
-        <EmptyState
-          tone="error"
-          icon={AlertTriangle}
+      <div className="mx-auto max-w-2xl px-6 py-10">
+        <ErrorState
           title="Couldn't load this scan"
-          description={error}
-          action={
-            <Link href="/" className="text-sm text-primary hover:underline">
-              Back to home
-            </Link>
-          }
+          message={error}
+          detail={params.scanId}
+          onRetry={retry}
+          retryLabel="Try again"
         />
       </div>
     )
   }
 
-  if (!result) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 px-6 py-32 text-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Loading scan results…</p>
-      </div>
-    )
-  }
+  if (!result) return <DashboardSkeleton />
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <Link
         href="/"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="group mb-6 inline-flex items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> All scans
+        <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" /> All
+        scans
       </Link>
 
       <div className="mb-8 flex flex-wrap items-baseline justify-between gap-2">
@@ -108,22 +107,29 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
         )}
       </div>
 
+      {/* Both cards take h-full so the row's two bottom edges line up whichever
+          one happens to be taller — at 1440x900 with a long risk summary that is
+          the breakdown, with a short one it is the gauge. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <RiskScore risk={result.risk} />
         </div>
         <div className="lg:col-span-2">
-          <ScoreBreakdown components={result.risk.components} score={result.risk.score} />
+          <ScoreBreakdown
+            components={result.risk.components}
+            score={result.risk.score}
+            className="h-full"
+          />
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-8">
         <StatsBar stats={result.stats} />
       </div>
 
       {/* Renders nothing at all when attack_paths is empty — heading included —
           so the dashboard never shows an empty canvas. */}
-      <div className="mt-10 empty:mt-0">
+      <div className="mt-8 empty:mt-0">
         <AttackPathGraph
           attackPaths={result.attack_paths}
           findingsById={findingsById}
@@ -131,12 +137,16 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
         />
       </div>
 
-      <div className="mt-10">
+      <div className="mt-8">
         <h2 className="mb-4 text-lg font-semibold text-foreground">
           Ranked findings{' '}
           <span className="text-muted-foreground/70">({result.findings.length})</span>
         </h2>
-        <FindingsTable findings={result.findings} onSelect={setSelectedId} />
+        <FindingsTable
+          findings={result.findings}
+          onSelect={setSelectedId}
+          selectedId={selectedId}
+        />
       </div>
 
       <FindingDrawer

@@ -75,9 +75,11 @@ function DrawerBody({ finding, risk }: { finding: Finding; risk: Risk | null }) 
       : null
 
   return (
-    <div className="flex flex-col gap-6 p-6 pt-14">
-      {/* 1 — Identity: severity, title, location. */}
-      <div>
+    <div className="flex flex-col gap-6 p-6">
+      {/* 1 — Identity: severity, title, location. `pr-12` clears the Sheet's close
+             button, which is 32px wide at right-4 — that is what lets the body use
+             a plain p-6 instead of the off-scale pt-14 it used to need. */}
+      <div className="pr-12">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -114,17 +116,26 @@ function DrawerBody({ finding, risk }: { finding: Finding; risk: Risk | null }) 
         )}
       </div>
 
-      {/* 2 — The code itself, with the flagged line called out. */}
-      {finding.code_snippet ? (
-        <section>
-          <p className={cn(EYEBROW, 'mb-2')}>Code</p>
+      {/* 2 — The code itself, with the flagged line called out. The section stays
+             put when there is no snippet so the drawer's running order never
+             changes between findings — a dependency finding and a code finding
+             read the same top to bottom. */}
+      <section>
+        <p className={cn(EYEBROW, 'mb-2')}>Code</p>
+        {finding.code_snippet ? (
           <CodeBlock
             snippet={finding.code_snippet}
             lineStart={finding.line_start}
             lineEnd={finding.line_end}
           />
-        </section>
-      ) : null}
+        ) : (
+          <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+            {finding.category === 'dependency'
+              ? 'No snippet — this is a dependency finding, not a line of your code.'
+              : 'No code snippet was captured for this finding.'}
+          </p>
+        )}
+      </section>
 
       {/* 3 — How the score was built. */}
       {risk && (
@@ -248,7 +259,7 @@ function DrawerBody({ finding, risk }: { finding: Finding; risk: Risk | null }) 
                 href={ref}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                className="flex w-fit max-w-full items-center gap-1.5 rounded text-xs text-primary transition-colors hover:text-primary/80 hover:underline"
               >
                 <ExternalLink className="h-3 w-3 shrink-0" />
                 <span className="truncate">{ref}</span>

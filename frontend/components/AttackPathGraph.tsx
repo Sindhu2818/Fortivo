@@ -149,7 +149,7 @@ export function AttackPathGraph({
         <div
           role="tablist"
           aria-label="Attack paths"
-          className="mb-3 flex flex-wrap gap-1.5 border-b border-border pb-3"
+          className="mb-4 flex flex-wrap gap-2 border-b border-border pb-4"
         >
           {paths.map((path, i) => {
             const style = SEVERITY_STYLES[path.severity] ?? SEVERITY_STYLES.info
@@ -162,10 +162,10 @@ export function AttackPathGraph({
                 aria-selected={selected}
                 onClick={() => setActiveIndex(i)}
                 className={cn(
-                  'inline-flex max-w-[22rem] items-center gap-2 rounded-md border px-3 py-1.5 text-xs transition-colors',
+                  'inline-flex max-w-[22rem] items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors',
                   selected
-                    ? 'border-primary/40 bg-primary/10 text-foreground'
-                    : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    ? 'border-primary/40 bg-primary/10 text-foreground hover:bg-primary/20'
+                    : 'border-border text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
                 )}
               >
                 <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', style.dot)} />
@@ -287,7 +287,7 @@ function SingleAttackPath({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex flex-col gap-2 border-b border-border p-5">
+      <div className="flex flex-col gap-2 border-b border-border px-6 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <Waypoints className="h-4 w-4 shrink-0 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">{path.title || path.id}</h3>

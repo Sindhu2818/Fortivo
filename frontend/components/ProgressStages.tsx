@@ -236,7 +236,7 @@ export function ProgressStages({ stage, counts, failed = false }: ProgressStages
   const isComplete = stage === 'complete'
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-8">
+    <div className="rounded-xl border border-border bg-card p-6">
       <FunnelCounter
         counts={counts}
         collapse={currentIndex >= REDUCING_INDEX}
@@ -244,7 +244,7 @@ export function ProgressStages({ stage, counts, failed = false }: ProgressStages
         frozen={failed}
       />
 
-      <div className="mt-8 border-t border-border pt-6">
+      <div className="mt-8 border-t border-border pt-4">
         <ol className="flex flex-col">
           {STAGES.map((s, i) => {
             // On 'complete' the last row is a result, not a step in flight.
