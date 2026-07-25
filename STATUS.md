@@ -11,11 +11,13 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 
 | | Sindhu (Windows + WSL — backend) | Charvitha (Fedora — frontend) |
 |---|---|---|
-| **Doing** | — | — |
-| **Next** | Task 1 — capture real scanner fixtures | Task 9 — Next.js scaffold + DEMO_MODE |
+| **Doing** | — | Task 9 — scaffold landed, DEMO_MODE still to do |
+| **Next** | Task 1 — capture real scanner fixtures | Finish Task 9, then Task 10 |
 | **Blocked on** | nothing | nothing |
 
-Nothing is done yet. The tree exists; all code files are stubs.
+Backend is untouched — all files are stubs. `frontend/` is now a real Next.js 14
+project (deps installed, `npm run build` compiles) but its 16 source files are still
+docblock-only stubs, so nothing renders yet.
 
 ---
 
@@ -89,14 +91,10 @@ other for shape — only for realism.
 
 *Write it here instead of reaching into the other person's tree.*
 
-- **Frontend deps are pre-approved but NOT installed.** Charvitha approved the full
-  list on 2026-07-25 and it is now frozen in `CLAUDE.md`. They could not be installed
-  from a backend session: `frontend/` has no `package.json` yet (Task 9 unstarted), and
-  `create-next-app` refuses to scaffold into a directory that already has one.
-  **Charvitha — after the Task 9 scaffold, run these two and no approval turn is needed:**
-  `npm i motion clsx tailwind-merge lucide-react @xyflow/react`
-  `npx motion-primitives@latest add text-effect` (needs Tailwind + `components.json`
-  + `lib/utils.ts` `cn()` in place first, i.e. run `shadcn init` before it).
+- (nothing)
+
+**Resolved 2026-07-25 — frontend deps are installed.** The list is frozen in
+`CLAUDE.md`; no further dep-approval turn is needed. Sindhu needs no action.
 
 ---
 
