@@ -20,6 +20,7 @@ returns a scan_id whose document later loads from GET /results/{scan_id}.
 """
 
 from __future__ import annotations
+from fastapi.middleware.cors import CORSMiddleware
 
 import argparse
 import logging
@@ -73,6 +74,16 @@ app = FastAPI(
     title="Fortivo Security Scanner API",
     description="Static analysis and risk scoring API for code repositories.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://fortivo-zeta.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 register_exception_handlers(app)
