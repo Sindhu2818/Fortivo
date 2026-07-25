@@ -1,0 +1,144 @@
+{
+  "scan_id": "scan_20260725_142301",
+  "repo_url": "./demo-app",
+  "repo_name": "demo-app",
+  "scanned_at": "2026-07-25T14:23:01Z",
+  "duration_seconds": 41.7,
+  "status": "complete",
+  "risk": {
+    "score": 78,
+    "band": "critical",
+    "components": {
+      "severity": 82,
+      "exploitability": 71,
+      "exposure": 88,
+      "blast_radius": 64
+    },
+    "summary": "An internet-reachable endpoint deserializes untrusted input, and the same service ships a hardcoded database password, so one request chains to full database access."
+  },
+  "stats": {
+    "raw_findings": 412,
+    "after_dedup": 260,
+    "reported_findings": 3,
+    "by_severity": {
+      "critical": 2,
+      "high": 1,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "by_source": {
+      "trivy": 2,
+      "semgrep": 1
+    }
+  },
+  "findings": [
+    {
+      "id": "f_001",
+      "rank": 1,
+      "source": "semgrep",
+      "rule_id": "python.lang.security.deserialization.pickle.avoid-pickle",
+      "title": "Untrusted input passed to pickle.loads",
+      "severity": "critical",
+      "cvss": null,
+      "category": "code",
+      "file_path": "services/api/handlers.py",
+      "line_start": 47,
+      "line_end": 47,
+      "package": null,
+      "code_snippet": "payload = pickle.loads(base64.b64decode(request.data))",
+      "cwe": ["CWE-502"],
+      "references": ["https://cwe.mitre.org/data/definitions/502.html"],
+      "occurrences": 1,
+      "duplicate_of": null,
+      "score_contribution": 18.2,
+      "explanation": {
+        "what": "The request body is deserialized with pickle, which executes arbitrary constructors during load.",
+        "why_it_matters": "This handler is mounted on the public API router, so any unauthenticated caller can run code in the container.",
+        "fix": "Replace pickle with json.loads and validate the parsed body against a schema.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_002",
+      "rank": 2,
+      "source": "trivy",
+      "rule_id": "generic-db-password",
+      "title": "Hardcoded PostgreSQL password in source",
+      "severity": "critical",
+      "cvss": null,
+      "category": "secret",
+      "file_path": "services/api/config.py",
+      "line_start": 12,
+      "line_end": 12,
+      "package": null,
+      "code_snippet": "DATABASE_URL = \"postgresql://admin:hunter2@db.internal:5432/prod\"",
+      "cwe": ["CWE-798"],
+      "references": [],
+      "occurrences": 4,
+      "duplicate_of": null,
+      "score_contribution": 15.6,
+      "explanation": {
+        "what": "A production database URL with an inline password is committed to the repository.",
+        "why_it_matters": "Anyone who reaches the filesystem — or reads the git history — gets full database credentials.",
+        "fix": "Move the URL to an environment variable and rotate the password.",
+        "confidence": "high"
+      }
+    },
+    {
+      "id": "f_003",
+      "rank": 3,
+      "source": "trivy",
+      "rule_id": "CVE-2024-21538",
+      "title": "Regular expression denial of service in cross-spawn",
+      "severity": "high",
+      "cvss": 7.5,
+      "category": "dependency",
+      "file_path": "services/web/package-lock.json",
+      "line_start": 1420,
+      "line_end": 1420,
+      "package": {
+        "name": "cross-spawn",
+        "installed_version": "7.0.3",
+        "fixed_version": "7.0.5"
+      },
+      "code_snippet": "\"cross-spawn\": \"^7.0.3\"",
+      "cwe": ["CWE-1333"],
+      "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-21538"],
+      "occurrences": 3,
+      "duplicate_of": null,
+      "score_contribution": 9.1,
+      "explanation": {
+        "what": "cross-spawn builds a regular expression from caller-controlled input, so a crafted argument can hang the event loop.",
+        "why_it_matters": "The web service parses request paths through this dependency, so a single request can stall the process.",
+        "fix": "Bump cross-spawn to 7.0.5 and regenerate the lockfile.",
+        "confidence": "medium"
+      }
+    }
+  ],
+  "attack_paths": [
+    {
+      "id": "ap_001",
+      "title": "Unauthenticated RCE to database credential theft",
+      "severity": "critical",
+      "likelihood": "likely",
+      "narrative": "An attacker posts a crafted payload to the public API, which deserializes it with pickle and executes code inside the container. From there they read config.py, recover the hardcoded PostgreSQL password, and connect directly to the production database.",
+      "steps": [
+        {
+          "order": 1,
+          "finding_id": "f_001",
+          "label": "Pickle deserialization gives code execution",
+          "technique": "Execution"
+        },
+        {
+          "order": 2,
+          "finding_id": "f_002",
+          "label": "Hardcoded DB credential read from disk",
+          "technique": "Credential access"
+        }
+      ],
+      "edges": [{ "from": "f_001", "to": "f_002" }]
+    }
+  ],
+  "errors": []
+}

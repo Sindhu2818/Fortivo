@@ -1,0 +1,3 @@
+{
+  "_placeholder": "Task 1 replaces this file with verbatim output of: trivy fs --format json --scanners vuln,secret,misconfig demo-app"
+}
