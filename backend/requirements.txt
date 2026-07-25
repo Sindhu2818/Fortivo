@@ -1,4 +1,13 @@
-fastapi
-uvicorn
-pydantic
-google-genai
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+pydantic>=2.8.0
+python-dotenv>=1.0.1
+
+google-genai>=1.28.0
+
+requests>=2.32.3
+gitpython>=3.1.43
+
+python-multipart>=0.0.9
+typing-extensions>=4.12.2
