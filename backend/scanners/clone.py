@@ -8,7 +8,8 @@ Returns the local directory to scan plus a repo_name. Owns cleanup.
 
 Definition of done
 ------------------
-Given "./demo-app" returns that path unchanged; given a public GitHub URL returns
+Given "./demo-app", resolves it relative to the project root and returns
+the absolute path to the local repository; given a public GitHub URL returns
 a temp dir containing the checked-out tree.
 """
 
@@ -80,11 +81,19 @@ class CloneResult:
 
 def _prepare_local_path(repo_url: str) -> CloneResult:
     path = Path(repo_url)
+
+    # Resolve relative paths from the project root instead of the current
+    # working directory so "./demo-app" works no matter where uvicorn is started.
+    if not path.is_absolute():
+        project_root = Path(__file__).resolve().parents[2]
+        path = (project_root / path).resolve()
+
     if not path.is_dir():
         raise CloneError(f"Local repository path is not a directory: {repo_url}")
+
     return CloneResult(
-        scan_path=repo_url,
-        repo_name=derive_repo_name(repo_url),
+        scan_path=str(path),
+        repo_name=derive_repo_name(str(path)),
         _cleanup_dir=None,
     )
 

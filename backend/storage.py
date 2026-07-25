@@ -43,7 +43,7 @@ def new_scan_id(now: Optional[datetime] = None) -> str:
         now: Optional datetime override for deterministic testing. Defaults to UTC now.
     """
     ts = now or datetime.now(timezone.utc)
-    return f"scan_{ts.strftime('%Y%m%d_%H%M%S')}"
+    return f"scan_{ts.strftime('%Y%m%d_%H%M%S_%f')}"
 
 
 def save(
