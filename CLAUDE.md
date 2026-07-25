@@ -4,7 +4,7 @@ Read this file at the start of every session. It outranks your defaults.
 
 ## Context
 
-Fortivo is a **hackathon MVP**. Deadline: **2026-07-26 18:00 IST**. Team of 2.
+Fortivo is a **hackathon MVP**. Deadline: **2026-07-26 10:00 IST**. Team of 2.
 
 It scans a Git repo with Trivy + Semgrep, deduplicates and ranks the findings down
 to the 30 that matter, scores overall risk 0–100, uses an LLM to explain each
@@ -20,16 +20,40 @@ that is correct. When in doubt, pick the shorter path.
 - **Storage:** JSON files in `./results/`. No database. No auth. No Docker for our app.
 - **LLM:** Gemini 2.0 Flash, key from env var `GEMINI_API_KEY`
 - **Ports:** backend 8000, frontend 3000
-- **OS:** Ubuntu
 
 Trivy and Semgrep are external CLI binaries invoked via `subprocess`. They are not
 Python dependencies.
 
+## Team and OS
+
+| Person | Machine | Owns |
+|---|---|---|
+| **Charvitha** | Fedora Linux | `/backend`, `/fixtures`, `/demo-app` |
+| **Sindhu** | Windows | `/frontend` |
+
+This split is not arbitrary. **Semgrep has no native Windows support** — it requires
+WSL — and Trivy on Windows is awkward. So the scanners only ever run on Charvitha's
+Fedora machine. Sindhu never needs Trivy, Semgrep, or even the backend running: she
+develops against `fixtures/mock_results.json` with `NEXT_PUBLIC_DEMO_MODE=true`.
+
+Cross-platform rules that follow from this:
+
+- Backend code must not shell out to anything but `trivy`, `semgrep` and `git`, and
+  must assume POSIX paths. It is never run on Windows.
+- Frontend code must not assume POSIX paths or shell commands. `npm` scripts only —
+  no `&&`-chained shell one-liners in `package.json`, no `rm -rf`.
+- All `file_path` values in the contract are repo-relative POSIX strings. The
+  frontend only ever displays them, never resolves them.
+- Commit line endings as LF. If Windows git rewrites them, that is a `.gitattributes`
+  problem, not a code problem — do not "fix" it in source.
+
 ## File ownership
 
-- **Backend sessions touch ONLY `/backend` and `/fixtures`.**
+- **Backend sessions touch ONLY `/backend`, `/fixtures` and `/demo-app`.**
 - **Frontend sessions touch ONLY `/frontend`,** and read `fixtures/mock_results.json`.
-- Both may update `TASKS.md`. Neither edits the other's tree.
+- Both may update `TASKS.md` and `STATUS.md`. Neither edits the other's tree.
+- If you need something from the other side, write it down in `STATUS.md` under
+  **Blocked / needs the other person** — do not reach across and build it yourself.
 
 ## CONTRACT.md is frozen
 
