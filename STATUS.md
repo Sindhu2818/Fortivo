@@ -41,7 +41,7 @@ Nothing is done yet. The tree exists; all code files are stubs.
 
 ### Charvitha — backend chain
 - [ ] **1. Fixtures** — real Trivy + Semgrep JSON in `/fixtures`. *Unblocks everything, including Sindhu's realistic mock data. Do this first.*
-- [ ] **2. Demo app** — the vulnerable repo the whole demo scans
+- [x] **2. Demo app** — the vulnerable repo the whole demo scans
 - [ ] **3. Scan endpoint + normalizer**
 - [ ] **4. Reduction** — dedup + rank to 30
 - [ ] **5. Scoring** — 0-100 + four components

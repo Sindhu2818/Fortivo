@@ -11,7 +11,7 @@ For the at-a-glance "what's left right now" view, see [STATUS.md](STATUS.md).
 | # | Task | Owner | Status | DoD-command |
 |---|---|---|---|---|
 | 1 | Context + fixtures — real Trivy and Semgrep JSON captured into `/fixtures`, plus `mock_results.json` conforming to CONTRACT.md | C | todo | `python -c "import json;[json.load(open(f)) for f in ['fixtures/trivy_sample.json','fixtures/semgrep_sample.json','fixtures/mock_results.json']]"` |
-| 2 | Demo app — small deliberately vulnerable repo in `/demo-app` that both scanners flag | C | todo | `trivy fs demo-app \| head` and `semgrep --config auto demo-app \| head` both report findings |
+| 2 | Demo app — small deliberately vulnerable repo in `/demo-app` that both scanners flag | C | done | `trivy fs demo-app \| head` and `semgrep --config auto demo-app \| head` both report findings |
 | 3 | Scan endpoint + normalizer — `POST /scan` runs both scanners via subprocess, `backend/scanners/normalize.py` maps raw output to `Finding` | C | todo | `curl -X POST localhost:8000/scan -d '{"repo_url":"./demo-app"}' -H 'content-type: application/json'` returns a `scan_id` |
 | 4 | Reduction — dedup + rank down to 30 findings, `occurrences` populated | C | todo | `stats.after_dedup < stats.raw_findings` and `len(findings) <= 30` in the written results file |
 | 5 | Scoring — 0–100 risk score, four components, band derivation | C | todo | `risk.score` is an int 0–100 and `risk.band` matches the CONTRACT.md bands |

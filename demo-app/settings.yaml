@@ -1,0 +1,25 @@
+service:
+  name: acme-invoicing
+  region: ap-south-1
+  support_email: support@acme-invoicing.io
+
+billing:
+  currency: INR
+  tax_rate: 0.18
+  due_days: 30
+  late_fee_percent: 1.5
+  reminder_schedule:
+    - 7
+    - 3
+    - 1
+
+exports:
+  max_rows: 50000
+  formats:
+    - csv
+    - json
+
+features:
+  partial_payments: true
+  multi_currency: false
+  webhook_retries: 3
