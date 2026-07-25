@@ -140,33 +140,13 @@ export interface ScanAccepted {
   status: ScanStatus
 }
 
-/**
- * Progress types. CONTRACT.md is frozen and describes the *result* document; it
- * says nothing about the in-flight status endpoint, so these live here and are
- * the frontend's proposal to the backend. See STATUS.md.
+/*
+ * There are no in-flight progress types here on purpose. ScanStage/ScanCounts/
+ * ScanProgress used to live at this spot as the frontend's proposal for a
+ * status endpoint the backend never built. POST /scan is synchronous, so a scan
+ * is already terminal by the time the frontend can see it — nothing to model.
+ * Don't reintroduce them without the async pipeline they describe.
  */
-export type ScanStage =
-  | 'cloning'
-  | 'scanning'
-  | 'normalizing'
-  | 'reducing'
-  | 'reasoning'
-  | 'complete'
-
-export interface ScanCounts {
-  /** Raw findings emitted so far. Ticks up while the scanners run. */
-  total_raw: number
-  /** Survivors after dedup. `null` until the reducing stage. */
-  after_dedupe: number | null
-  /** Findings the LLM has explained. `null` until the reasoning stage. */
-  analyzed: number | null
-}
-
-export interface ScanProgress {
-  status: ScanStatus
-  stage: ScanStage
-  counts: ScanCounts
-}
 
 export interface ScanSummary {
   scan_id: string

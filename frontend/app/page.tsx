@@ -7,11 +7,11 @@
  * list can be fetched during render.
  *
  * DoD: localhost:3000 shows the pitch and a prefilled input whose Scan button
- * lands on /scan/<scan_id>.
+ * lands on /dashboard/<scan_id>.
  */
 
 import Link from 'next/link'
-import { Clock } from 'lucide-react'
+import { Clock, TriangleAlert } from 'lucide-react'
 import { ScanInput } from '@/components/ScanInput'
 import { EmptyState } from '@/components/EmptyState'
 import { BAND_STYLES } from '@/lib/severity'
@@ -74,7 +74,7 @@ export default async function LandingPage() {
               return (
                 <Link
                   key={scan.scan_id}
-                  href={`/scan/${scan.scan_id}`}
+                  href={`/dashboard/${scan.scan_id}`}
                   className="group flex items-center gap-4 rounded-xl border border-border bg-card px-6 py-4 transition-colors hover:border-primary/40 hover:bg-muted"
                 >
                   <div className="flex-1">
@@ -85,11 +85,23 @@ export default async function LandingPage() {
                       {formatDate(scan.scanned_at)}
                     </p>
                   </div>
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-xs uppercase tracking-wide ${band.bg} ${band.text} ${band.border}`}
-                  >
-                    {band.label} · {scan.score}
-                  </span>
+                  {/* A scan that never ran still saves score 0 / band "low" —
+                      correct per the contract, but it would render as a clean
+                      "LOW · 0" and read as a genuine result. Status wins over
+                      the band. Neutral, not red: collisions.md reserves the
+                      ramp's colours for severity. */}
+                  {scan.status === 'failed' ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                      <TriangleAlert className="h-3 w-3" />
+                      Failed
+                    </span>
+                  ) : (
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-xs uppercase tracking-wide ${band.bg} ${band.text} ${band.border}`}
+                    >
+                      {band.label} · {scan.score}
+                    </span>
+                  )}
                 </Link>
               )
             })}

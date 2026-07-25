@@ -11,7 +11,7 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 
 | | Sindhu (Windows + WSL — backend) | Charvitha (Fedora — frontend) |
 |---|---|---|
-| **Doing** | Backend verification and integration | — |
+| **Doing** | Backend verification and integration | Task 15 — integration, frontend half done |
 | **Next** | Gemini integration → Golden run | Task 17 — Video, then task 19 — pitch |
 | **Blocked on** | nothing | nothing |
 
@@ -22,6 +22,15 @@ verifying attack-path generation and producing the final golden demo result.
 
 The frontend already runs independently in demo mode using
 `fixtures/mock_results.json`.
+
+**Task 15, frontend half: done and verified in a browser 2026-07-25.** With
+`NEXT_PUBLIC_DEMO_MODE=false` against a live backend, `../demo-app` scans
+end-to-end in 17.8s and the dashboard renders the real document — score 92,
+`55 → 50 → 30`, 30 ranked findings, 5 attack paths. `next build`, `next lint`
+and `tsc --noEmit` all clean. The remaining half is Gemini: the run above
+emitted `GEMINI_API_KEY not configured; using fallback prose.`, so every
+`explanation` is template text. See the blockers section for what changed and
+what is left for Sindhu.
 
 ---
 
@@ -46,6 +55,70 @@ The frontend already runs independently in demo mode using
 
 ---
 
+## Running it for real (not demo mode)
+
+Added 2026-07-25 after the first live end-to-end run. Fedora is a normal Linux
+box, so — unlike Sindhu's Windows machine — Trivy and Semgrep run on it
+natively; no WSL needed on this side.
+
+**Backend venv:** lives at `backend/.venv` (gitignored, not committed — each
+machine creates its own). Built with Python **3.11** specifically (`main.py`
+targets 3.11; the system default `python3` may be newer and untested here):
+
+```bash
+cd backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install semgrep        # not in requirements.txt — it's a CLI tool, not a
+                            # Python dependency of our code, but semgrep's own
+                            # PyPI package is how you get the binary on Linux
+```
+
+**Run the backend** — from inside `backend/`, not the repo root:
+
+```bash
+cd backend && source .venv/bin/activate
+uvicorn main:app --port 8000
+```
+
+This matters: `scanners/clone.py` resolves a local `repo_url` like `./demo-app`
+relative to the process's **current working directory**, not the repo root. Run
+uvicorn from `backend/` (as above) and `./demo-app` fails in ~0.02s with
+"Local repository path is not a directory". Verified both ways on 2026-07-25:
+
+```
+{"repo_url":"./demo-app"}   -> {"status":"failed"}    (0.02s)
+{"repo_url":"../demo-app"}  -> {"status":"complete"}  (17.8s, 55 -> 50 -> 30, score 92)
+```
+
+So **the demo path is `../demo-app`**, and that is what the landing page
+prefills. Relative, not absolute, so it works on Sindhu's WSL too. See the
+blocker section for the real fix, which belongs in `clone.py`.
+
+**Run the frontend:**
+
+```bash
+cd frontend && npm run dev
+```
+
+**The `NEXT_PUBLIC_DEMO_MODE` switch** — `frontend/.env.local` (gitignored,
+copied from `.env.example`):
+
+- `NEXT_PUBLIC_DEMO_MODE=true` — the default for normal frontend work. No
+  backend needed; every `lib/api.ts` call resolves from
+  `fixtures/mock_results.json` instead.
+- `NEXT_PUBLIC_DEMO_MODE=false` — hits the real backend at
+  `NEXT_PUBLIC_API_BASE` (`http://localhost:8000`). Only flip this when the
+  backend is actually running, and expect the gaps documented in the blockers
+  section below.
+
+Flip it back to `true` before going back to normal frontend-only work — it's
+not something any component branches on at runtime, so leaving it `false`
+with no backend running just breaks everything silently.
+
+---
+
 ## Pending work
 
 ### Sindhu — backend chain
@@ -64,8 +137,11 @@ The frontend already runs independently in demo mode using
 ### Charvitha — frontend chain
 
 - [x] **9. Scaffold + DEMO_MODE**
-- [x] **10. Scan page** — landing + `/scan/[id]` progress with the funnel counter
-- [x] **11. Dashboard** — RiskGauge + ReductionStat header row, ranked FindingsTable below
+- [x] **10. Scan page** — landing + `/scan/[id]` progress with the funnel counter.
+  *Superseded during task 15: the progress page is gone and `/` submits straight
+  to the dashboard. See Blockers.*
+- [x] **11. Dashboard** — RiskScore + ScoreBreakdown header row, StatsBar,
+  attack graph, ranked FindingsTable below
 - [x] **12. Finding drawer** — Sheet with code snippet, ScoreBreakdown, reasoning and DiffViewer
 - [x] **13. Attack graph** — `AttackPathGraph` + `AttackPathNode`, tabbed when a scan has more than one path, hidden entirely when it has none
 - [x] **14. Polish** — skeletons, error state with retry, empty states, one
@@ -109,7 +185,107 @@ Remaining:
 
 ## Blockers
 
-Currently no blocking issues between frontend and backend.
+<!-- STALE as of 2026-07-25 — the line below was written before anyone ran the
+     real backend against the real frontend. It's wrong. See the section
+     immediately below for what a real run actually found. -->
+~~Currently no blocking issues between frontend and backend.~~
+
+### Real integration gap — found running a live scan (2026-07-25) — RESOLVED, frontend side
+
+First time the backend ran for real (previously frontend-only / demo-mode-only
+testing). Running `NEXT_PUBLIC_DEMO_MODE=false` against a live backend surfaced
+actual blockers, not just the two flagged fields below:
+
+- **No `GET /scan/{id}/status` endpoint exists on the backend.** The entire
+  `/scan/[id]` progress page — `ScanProgress`/`ScanStage`/`ScanCounts`, the whole
+  polling loop in `lib/api.ts`'s `getStatus()` — depended on it and got a 404 in
+  real mode. That broke the landing page's only reachable "start a scan" flow,
+  and every link in "Recent scans" (they all pointed at `/scan/<id>`).
+- **Backend `POST /scan` is synchronous** — `run_scan()` (`core/pipeline.py`)
+  runs the whole pipeline before it responds, so the `status` it returns is
+  always already `"complete"` or `"failed"`, **never `"queued"` or `"running"`**.
+  Anything polling for those two states is waiting on something this backend
+  will never send.
+- Neither `ScanInput.tsx` nor `app/scan/page.tsx` checked the `status` field
+  they got back from `POST /scan` — both navigated forward on any 2xx response,
+  even `{"status":"failed"}`.
+
+**Decision taken 2026-07-25: keep the backend synchronous, delete the polling
+UI.** Not building the status endpoint — a real async pipeline is a bigger
+change than the demo needs, and the deadline is 2026-07-26. The frontend now
+matches the backend it actually has:
+
+- `/` → `ScanInput` → `startScan()` → **`/dashboard/<scan_id>`**, no polling.
+  This is the flow that was already verified end-to-end in a browser; it just
+  used to be orphaned behind `/scan`, which nothing linked to.
+- `ScanInput` checks `status` and refuses to navigate on `"failed"`, showing
+  the repo path it could not reach instead.
+- "Recent scans" links point at `/dashboard/<id>` too, so a completed scan
+  opens from history.
+- **Deleted:** `app/scan/` entirely (both the form page and the `[id]` polling
+  page), `components/ScanForm.tsx`, `components/ProgressStages.tsx`,
+  `getStatus()` + the scripted demo timeline in `lib/api.ts`, and
+  `ScanStage`/`ScanCounts`/`ScanProgress` in `lib/types.ts`. There are now
+  exactly two routes: `/` and `/dashboard/[scanId]`.
+- **Also deleted, orphaned by the above:** `components/RiskGauge.tsx` and
+  `components/ReductionStat.tsx`. Both were the progress page's variants of
+  things the dashboard already has — `RiskScore` and `StatsBar` respectively —
+  and nothing imported them once `app/scan/` went. Not a design change: the
+  dashboard's versions are the ones that were always on screen at the end.
+
+Nothing here needs backend work. **Sindhu: no action required** — but note the
+frontend no longer has any code path that would consume a status endpoint, so
+don't build one for us.
+
+The one cost: the `412 → 30 that matter` funnel animation went with
+`ProgressStages`. The reduction story still lands on the dashboard statically
+via `StatsBar`. The component is recoverable from git history if we want to
+replay it over the dashboard's loading state later.
+
+### Failed scans no longer masquerade as clean ones (2026-07-25)
+
+A scan whose `repo_url` does not resolve still saves a full document with
+`status: "failed"`, `risk.score: 0`, `risk.band: "low"` — correct per the
+contract, the band really is derived from the score. But both the history list
+and the dashboard read only the band, so a scan that never ran rendered as a
+tidy `LOW · 0`, indistinguishable from a genuinely clean repo. There are three
+such documents in `results/` right now, which is how it was caught.
+
+Status now outranks the band in both places: `/` shows a neutral `FAILED` pill
+instead of the band badge, `/dashboard/[scanId]` shows a `SCAN FAILED` pill in
+the header. Neutral rather than red, per `collisions.md` — the severity ramp
+keeps its colours.
+
+### `FindingsTable` printed a rank it had just re-sorted away from
+
+The table sorted rows by `score_contribution` descending, then printed each
+row's `rank`, which had been assigned backend-side before that re-sort. The `#`
+column therefore counted `1, 2, 3, 6, 7, ... 4, 5` on data that was perfectly
+ordered — it read as corrupted output but was purely a display bug. Confirmed
+against the live scan: `ranks` came back `1..30` in order, `score_contribution`
+order was `1,2,3,6,7,8,9,10,11,12,13,4,5,...`.
+
+Fixed by sorting on `rank`, which CONTRACT.md already guarantees the array
+arrives in. No change to the underlying data or to the contract.
+
+### Backend notes for Sindhu — not blocking, not touched from this side
+
+Two things a live run surfaced that live in `/backend`, so per the ownership
+rule they are written down here rather than fixed from a frontend session:
+
+1. **`./demo-app` cwd bug.** `scanners/clone.py:82` resolves a local `repo_url`
+   with a bare `Path(repo_url).is_dir()`, i.e. against the process cwd, which is
+   `backend/`. `main.py`'s own docstring (lines 17-19) tells you to run from
+   `backend/` and then POST `./demo-app` — those two instructions contradict
+   each other. The frontend prefill now says `../demo-app` and works, so this is
+   not blocking the demo; the real fix is resolving against the repo root.
+2. **`scan_id` collides within the same second.** Ids are
+   `scan_YYYYMMDD_HHMMSS`, so two scans started in the same second get the same
+   id and the second overwrites the first. Hit it by accident on 2026-07-25
+   running a failing scan and a succeeding one back to back — both came back as
+   `scan_20260725_170336` and only one document survived. Only reachable with
+   sub-second submissions, so low priority, but worth knowing before the golden
+   run.
 
 ### Needs a decision from Sindhu — two fields the contract does not have
 
@@ -163,6 +339,9 @@ git rm frontend/components/AttackGraph.tsx
 ```
 
 ### Task 14 — what the polish pass actually changed
+
+> Historical record, written before task 15. The `/scan` and `/scan/[id]` routes
+> it mentions no longer exist — everything else below still holds.
 
 Nothing about logic or data flow, per the task. Specifics worth knowing:
 

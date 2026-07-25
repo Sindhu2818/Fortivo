@@ -2,12 +2,20 @@
  * ScanInput: the landing page's one interaction — repo URL in, scan out.
  *
  * Responsibility: collect a repo_url, POST it via startScan, and route to
- * /scan/<scan_id>. Prefilled with the demo repo so the live demo is one click.
- * This is the only client component on the landing page, which keeps the page
- * itself a server component.
+ * /dashboard/<scan_id>. Prefilled with the demo repo so the live demo is one
+ * click. This is the only client component on the landing page, which keeps the
+ * page itself a server component.
  *
- * DoD: pressing Scan navigates to /scan/<scan_id>; a failed start shows a
- * readable message and leaves the form usable.
+ * This is the app's only scan entry point — the header's "New scan" links here.
+ *
+ * POST /scan is synchronous: it runs the whole pipeline before it answers, so
+ * the result document already exists by the time we navigate. There is nothing
+ * to poll for, which is why this goes straight to the dashboard rather than
+ * through a progress page.
+ *
+ * DoD: pressing Scan navigates to /dashboard/<scan_id>; a failed start, or a
+ * 202 whose body says status "failed", shows a readable message and leaves the
+ * form usable.
  */
 
 'use client'
@@ -18,7 +26,14 @@ import { Loader2, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { startScan } from '@/lib/api'
 
-const DEMO_REPO_URL = './demo-app'
+/**
+ * Relative to the backend process's cwd, not the repo root — scanners/clone.py
+ * resolves a local repo_url with a bare Path(). The documented way to start the
+ * backend is `uvicorn main:app --port 8000` from inside `backend/`, so the demo
+ * repo one level up is `../demo-app`. Staying relative keeps it working on both
+ * machines; `./demo-app` fails in ~0.02s.
+ */
+const DEMO_REPO_URL = '../demo-app'
 
 export function ScanInput() {
   const router = useRouter()
@@ -37,10 +52,20 @@ export function ScanInput() {
     setSubmitting(true)
     setError(null)
     try {
-      const { scan_id } = await startScan(trimmed)
+      const { scan_id, status } = await startScan(trimmed)
+      // POST /scan answers 202 even when the pipeline already failed — the
+      // backend is synchronous, so `status` is final by the time we read it.
+      // Navigating on the 2xx alone lands the user on a scan that never ran.
+      if (status === 'failed') {
+        setSubmitting(false)
+        setError(
+          `The scan failed before it produced any findings. Check that "${trimmed}" is reachable from the backend.`
+        )
+        return
+      }
       // Deliberately stays disabled through the route change so the button does
       // not flash back to its idle state mid-navigation.
-      router.push(`/scan/${scan_id}`)
+      router.push(`/dashboard/${scan_id}`)
     } catch (err) {
       setSubmitting(false)
       setError(err instanceof Error ? err.message : 'Could not start the scan.')
@@ -65,7 +90,9 @@ export function ScanInput() {
         <Button type="submit" size="lg" disabled={submitting} className="h-12 shrink-0">
           {submitting ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Starting…
+              {/* Not "Starting…": the request is the scan, and it is held open
+                  for the whole pipeline. */}
+              <Loader2 className="h-4 w-4 animate-spin" /> Scanning…
             </>
           ) : (
             <>

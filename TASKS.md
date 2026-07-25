@@ -28,7 +28,7 @@ For the at-a-glance view, see `STATUS.md`.
 | 12 | Finding drawer | C | done | drawer opens correctly |
 | 13 | Attack graph | C | done | graph renders |
 | 14 | Polish | C | done | responsive, no console errors |
-| 15 | Integration | C+S | todo | frontend works with live backend |
+| 15 | Integration | C+S | in-progress | frontend works with live backend — **frontend half done**, verified against a live scan of `../demo-app` (score 92, 55→50→30, 30 findings, 5 paths). Remaining: Gemini key, so `explanation` is still template prose |
 | 16 | Golden run | S | todo | `results/golden.json` exists |
 | 17 | Video | C | todo | walkthrough recorded |
 | 18 | Decisions document | S | todo | `DECISIONS.md` completed |

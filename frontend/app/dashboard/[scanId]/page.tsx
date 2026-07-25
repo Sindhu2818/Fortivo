@@ -99,11 +99,20 @@ export default function DashboardPage({ params }: { params: { scanId: string } }
           </p>
         </div>
         {/* Neutral, not amber: collisions.md reserves the ramp's colours for severity. */}
-        {result.errors.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 font-mono text-xs text-muted-foreground">
-            <AlertTriangle className="h-3.5 w-3.5" /> {result.errors.length} non-fatal warning
-            {result.errors.length > 1 ? 's' : ''}
+        {result.status === 'failed' ? (
+          // A scan that never ran still saves score 0 / band "low", so without
+          // this the page reads as a genuine clean result. Status outranks the
+          // band, same rule as the history list on /.
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 font-mono text-xs uppercase tracking-wide text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5" /> Scan failed
           </span>
+        ) : (
+          result.errors.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 font-mono text-xs text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5" /> {result.errors.length} non-fatal warning
+              {result.errors.length > 1 ? 's' : ''}
+            </span>
+          )
         )}
       </div>
 

@@ -2,17 +2,19 @@
  * FindingsTable: the ranked list of up to 30 findings.
  *
  * Responsibility: render rank, severity, title, location, category, score and
- * occurrences, sorted by score_contribution descending. Clicking a row calls
- * onSelect(findingId) — it owns no drawer state itself. No filter or search UI:
- * 30 rows is a list you read, not one you query.
+ * occurrences in `rank` order, which CONTRACT.md guarantees the findings array
+ * already arrives in. Clicking a row calls onSelect(findingId) — it owns no
+ * drawer state itself. No filter or search UI: 30 rows is a list you read, not
+ * one you query.
  *
  * The location cell truncates from the *left* so the filename and line survive:
  * `direction: rtl` puts the overflow (and the ellipsis) at the start of the
  * string, and `unicode-bidi: plaintext` keeps the path itself rendering
  * left-to-right so `:1420` cannot get reordered away from its filename.
  *
- * DoD: 30 rows render in score order under a header that stays put while they
- * scroll, and a click surfaces the id to the parent.
+ * DoD: 30 rows render in rank order, the `#` column counting up without gaps,
+ * under a header that stays put while they scroll, and a click surfaces the id
+ * to the parent.
  */
 
 'use client'
@@ -43,10 +45,11 @@ const HEADER_CELL =
   'sticky top-0 z-10 border-b border-border bg-card px-3 py-3 font-medium'
 
 export function FindingsTable({ findings, onSelect, selectedId }: FindingsTableProps) {
-  const rows = useMemo(
-    () => [...findings].sort((a, b) => b.score_contribution - a.score_contribution),
-    [findings]
-  )
+  // Sort on `rank`, not on `score_contribution`. Ranking already happened
+  // backend-side and `rank` is what the `#` column prints — re-sorting on the
+  // score made the two disagree, so the visible numbers skipped around
+  // (1, 2, 3, 6, 7, ... 4, 5) on data that was perfectly ordered.
+  const rows = useMemo(() => [...findings].sort((a, b) => a.rank - b.rank), [findings])
 
   // Longest bar in the table, so the widths compare against the top finding
   // rather than against an absolute scale nobody can see.

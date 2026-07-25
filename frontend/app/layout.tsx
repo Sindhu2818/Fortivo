@@ -52,8 +52,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </span>
               </Link>
               <nav className="ml-auto flex items-center gap-1">
+                {/* The landing page owns the only scan form. There used to be a
+                    second one at /scan that submitted to the same endpoint and
+                    then skipped the progress page; it is gone. */}
                 <Link
-                  href="/scan"
+                  href="/"
                   className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   New scan
