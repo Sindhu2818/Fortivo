@@ -33,9 +33,25 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
     cache: 'no-store',
   })
   if (!res.ok) {
-    throw new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status}`)
+    // FastAPI puts the readable half in `detail` ("Local path './x' does not
+    // exist."). Dropping it meant a rejected path showed up as a bare 400 and
+    // the reason was only in the backend's stdout.
+    throw new Error(`${init?.method ?? 'GET'} ${path} failed: ${res.status}${
+      formatDetail(await res.text().catch(() => ''))
+    }`)
   }
   return res.json() as Promise<T>
+}
+
+/** Pulls FastAPI's `detail` out of an error body; falls back to raw text. */
+function formatDetail(body: string): string {
+  if (!body) return ''
+  try {
+    const detail = (JSON.parse(body) as { detail?: unknown }).detail
+    return typeof detail === 'string' ? ` — ${detail}` : ''
+  } catch {
+    return ` — ${body.slice(0, 200)}`
+  }
 }
 
 /* ------------------------------------------------------------------ */

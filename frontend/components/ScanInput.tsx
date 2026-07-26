@@ -24,16 +24,19 @@ import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, ScanLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { startScan } from '@/lib/api'
+import { getResults, startScan } from '@/lib/api'
 
 /**
- * Relative to the backend process's cwd, not the repo root — scanners/clone.py
- * resolves a local repo_url with a bare Path(). The documented way to start the
- * backend is `uvicorn main:app --port 8000` from inside `backend/`, so the demo
- * repo one level up is `../demo-app`. Staying relative keeps it working on both
- * machines; `./demo-app` fails in ~0.02s.
+ * Relative to the repo root, not the backend process's cwd. scanners/clone.py
+ * resolves a relative repo_url against the project root, so `./demo-app` is
+ * correct no matter where uvicorn was started from — and `../demo-app`, which
+ * this used to send, now points outside the repo and fails in ~0.01s.
+ *
+ * Keep the `./` prefix: utils/validators.py only takes its local-path branch
+ * for inputs starting with `.` or `/`, so a bare `demo-app` is parsed as a URL
+ * and rejected.
  */
-const DEMO_REPO_URL = '../demo-app'
+const DEMO_REPO_URL = './demo-app'
 
 export function ScanInput() {
   const router = useRouter()
@@ -58,8 +61,16 @@ export function ScanInput() {
       // Navigating on the 2xx alone lands the user on a scan that never ran.
       if (status === 'failed') {
         setSubmitting(false)
+        // A failed scan is still persisted, and its errors[] carries the reason
+        // the 202 body has no room for ("Local repository path is not a
+        // directory: ../demo-app"). Worth the extra GET — without it the only
+        // copy of that line is the backend's stdout.
+        const reason = await getResults(scan_id)
+          .then((r) => r.errors[0])
+          .catch(() => undefined)
         setError(
-          `The scan failed before it produced any findings. Check that "${trimmed}" is reachable from the backend.`
+          reason ??
+            `The scan failed before it produced any findings. Check that "${trimmed}" is reachable from the backend.`
         )
         return
       }

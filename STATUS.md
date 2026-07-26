@@ -13,7 +13,7 @@ DoD commands; this file is the short answer to "what do I pick up next?".
 |---|---|---|
 | **Doing** | Backend verification and integration | Task 15 — integration, frontend half done |
 | **Next** | Gemini integration → Golden run | Task 17 — Video, then task 19 — pitch |
-| **Blocked on** | nothing | nothing |
+| **Blocked on** | a working Gemini key — see blockers | nothing |
 
 Backend architecture has been implemented. Scanner wrappers, normalization,
 pipeline orchestration, storage, models and API endpoints are present.
@@ -82,19 +82,17 @@ cd backend && source .venv/bin/activate
 uvicorn main:app --port 8000
 ```
 
-This matters: `scanners/clone.py` resolves a local `repo_url` like `./demo-app`
-relative to the process's **current working directory**, not the repo root. Run
-uvicorn from `backend/` (as above) and `./demo-app` fails in ~0.02s with
-"Local repository path is not a directory". Verified both ways on 2026-07-25:
+**This section is out of date as of 2026-07-26 — `clone.py` changed underneath
+it.** Commit `9108a87` made `clone.py` resolve relative paths against the
+**project root** instead of the process cwd, which inverted the demo path:
+`./demo-app` is now the correct one and `../demo-app` points outside the repo.
+`utils/validators.py` did not get the same change, so right now **no relative
+path works at all** — the two layers disagree and their valid inputs are
+disjoint. See "Relative local paths are broken on both sides" in the blockers
+section for the measurements and the one-line backend fix.
 
-```
-{"repo_url":"./demo-app"}   -> {"status":"failed"}    (0.02s)
-{"repo_url":"../demo-app"}  -> {"status":"complete"}  (17.8s, 55 -> 50 -> 30, score 92)
-```
-
-So **the demo path is `../demo-app`**, and that is what the landing page
-prefills. Relative, not absolute, so it works on Sindhu's WSL too. See the
-blocker section for the real fix, which belongs in `clone.py`.
+**The demo path is `./demo-app`**, and that is what the landing page now
+prefills. Relative, not absolute, so it works on Sindhu's WSL too.
 
 **Run the frontend:**
 
@@ -189,6 +187,227 @@ Remaining:
      real backend against the real frontend. It's wrong. See the section
      immediately below for what a real run actually found. -->
 ~~Currently no blocking issues between frontend and backend.~~
+
+### Relative local paths were broken on both sides (2026-07-26) — FIXED, both sides
+
+This is Sindhu's issues 1, 2, 4 and 5. Diagnosed from the Fedora side, backend
+running natively. **Root cause: two layers resolve a relative `repo_url`
+against different bases, and their valid inputs no longer overlap.**
+
+- `scanners/clone.py` — resolves against the **project root**
+  (`Path(__file__).resolve().parents[2]`), since commit `9108a87`.
+- `utils/validators.py` — resolves against the **process cwd**, via a bare
+  `Path(repo_url).exists()`. Never got the matching change.
+
+With uvicorn started from `backend/` (the documented way), measured today:
+
+```
+{"repo_url":"../demo-app"}   -> 202 {"status":"failed"}   0.007s
+   passes validators.py (../demo-app exists relative to backend/)
+   then dies in clone.py: "Local repository path is not a directory: ../demo-app"
+   because project_root/../demo-app = ~/Projects/demo-app, outside the repo
+
+{"repo_url":"./demo-app"}    -> 400 "Local path './demo-app' does not exist."
+   rejected by validators.py before clone.py is ever reached
+   (cwd is backend/), even though clone.py would have resolved it correctly
+
+{"repo_url":"/abs/path/to/Fortivo/demo-app"} -> 202 {"status":"complete"} 3.7s
+```
+
+So only an **absolute** path works today, which is not portable across our two
+machines. That is the whole of "Agent 1 stops before scanning" — nothing is
+wrong with Trivy, Semgrep, the pipeline or the frontend.
+
+**Fixed 2026-07-26 (Charvitha, with Sindhu's tree touched by agreement — see
+"Note on file ownership" below).** Rather than patch the duplicated logic in two
+places, the resolution now lives in one function:
+
+- `scanners/clone.py` — new `resolve_local_path()`, the single source of truth.
+  `_prepare_local_path()` calls it.
+- `utils/validators.py` — imports and calls the same function, so it can no
+  longer validate a different path than the one that gets scanned.
+- Rejections now name the resolved path: `Local path '../demo-app' does not
+  exist (resolved to /home/charvitha/Projects/demo-app).` That one line would
+  have made this a five-minute bug instead of a six-issue report.
+
+Verified after the fix:
+
+```
+./demo-app     -> accepted
+../demo-app    -> rejected, and says what it resolved to
+demo-app       -> rejected (no ./ prefix; see below)
+/nope          -> rejected
+```
+
+Keep the `./` prefix — `validators.py` only takes its local-path branch for
+inputs starting with `.` or `/`, so a bare `demo-app` is parsed as a URL and
+rejected. The landing page prefills `./demo-app` accordingly.
+
+### `.env` was never loaded — this is the real issue 6 (2026-07-26) — FIXED
+
+`python-dotenv` has been in `requirements.txt` since the first commit and
+**nothing ever called `load_dotenv()`**. `core/gemini.py` and `core/grok.py`
+read `os.environ` directly, so the `.env` at the repo root was inert: the keys
+could be filled in correctly and both agents would still log "API_KEY not set"
+and fall back to template prose. Filling in `.env` would have fixed nothing.
+
+`main.py` now calls `load_dotenv()` against the repo-root `.env` explicitly
+(not by walking up from the cwd, so it loads the same file whether uvicorn
+starts from `backend/` or the repo root). Confirmed: `GEMINI_MODEL` now arrives
+from `.env` as `gemini-2.0-flash`.
+
+**This changed the failure mode, and the new one is not ours to fix in code** —
+see the next section.
+
+### Both LLM keys are wrong — BLOCKED, needs Sindhu (2026-07-26)
+
+With `.env` actually loading, the real API errors finally surfaced. Neither is a
+code bug.
+
+**Gemini — key has zero quota.** Three attempts, all
+`429 RESOURCE_EXHAUSTED`, and the significant part is `limit: 0`:
+
+```
+Quota exceeded for metric: generativelanguage.googleapis.com/
+  generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+```
+
+`limit: 0` is not "we used up the quota" — it is "this project has no free-tier
+allowance at all". The key authenticates (429, not 401), so it is a real
+credential attached to a project that cannot call the model. It also does not
+have the `AIza…` shape an AI Studio key normally has. **Get a fresh key from
+https://aistudio.google.com/app/apikey**, or enable billing on the existing
+project. This is the last thing standing between us and Task 7.
+
+**Grok — that is a Groq key, not an xAI key.** `GROK_API_KEY` starts with
+`gsk_`, which is Groq Cloud's prefix (groq.com, the inference company). `grok.py`
+posts to `https://api.x.ai/v1/chat/completions` (xAI, Elon's Grok). Different
+companies, near-identical names. Confirmed directly against xAI:
+
+```
+GET https://api.x.ai/v1/models -> 400
+{"code":"invalid-argument","error":"Incorrect API key provided.
+ You can obtain an API key from https://console.x.ai."}
+```
+
+Two ways out, Sindhu's call:
+
+1. Get a real xAI key from https://console.x.ai (`xai-…`). Nothing else changes.
+2. Keep the Groq key and repoint Agent 4 at Groq — its API is OpenAI-compatible,
+   the same shape `grok.py` already speaks, so it is a base-URL and model-name
+   change (`https://api.groq.com/openai/v1/chat/completions`, e.g.
+   `llama-3.3-70b-versatile`). I did **not** do this: it swaps a vendor, and
+   CLAUDE.md's stack section does not list either Grok or Groq, so it is a team
+   decision, not a bug fix. I could not verify the Groq key works — the check
+   was blocked from this session.
+
+Separately, `DEFAULT_GROK_MODEL` was `grok-2`, which xAI has retired (`400
+"Model not found: grok-2"`). Bumped to `grok-4` to match `.env.example`. **Your
+local `.env` still says `GROK_MODEL=grok-2` and env wins over the default — fix
+that line too.** Unverified against the live API for lack of a valid key.
+
+Note Agent 4 (Grok) is not in CLAUDE.md's stack, which names Gemini only. Worth
+a conversation about whether it earns its place before the demo, given it is
+currently pure fallback prose.
+
+### GitHub `repo_name` keeps its `.git` — not a bug (2026-07-26)
+
+Flagged this earlier as cosmetic. Checked CONTRACT.md before touching it:
+`repo_name` is defined as "Last path segment of `repo_url`", and for
+`…/juice-shop.git` that segment literally is `juice-shop.git`. Current behaviour
+conforms. **Left alone** — the contract is frozen, so stripping the suffix would
+put the code out of spec, not into it.
+
+### GitHub URL scanning — could NOT reproduce a failure (2026-07-26)
+
+Sindhu's issue 3. Ran it here against a real public repo:
+
+```
+{"repo_url":"https://github.com/juice-shop/juice-shop.git"}
+   -> 202 {"status":"complete"} in 70.5s, 3 findings, score 26
+```
+
+Clone, scanners and the full pipeline all completed. So the failure is not in
+`clone.py`'s git path, at least not on Linux. Two things worth checking before
+assuming a backend bug:
+
+- **It takes ~70s and the UI shows only a spinner.** `POST /scan` is
+  synchronous and `lib/api.ts` sets no timeout, so the browser's own limit
+  (~300s in Chrome) is the only bound. A large repo on WSL could plausibly read
+  as a hang rather than a failure. If that is what happened, it is not a bug.
+- **`derive_repo_name` returns `juice-shop.git`** for a URL ending in `.git` —
+  the `.git` suffix is not stripped. Cosmetic, shows up in the dashboard
+  header. Sindhu's call whether to fix; the contract does not forbid it.
+
+**Sindhu: please paste the backend stdout for a failing GitHub scan.** Without
+it there is nothing more to diagnose from this side — git clone in WSL failing
+on a proxy or on credentials would look identical from the frontend.
+
+### Scanner and key gaps seen on this machine (2026-07-26)
+
+Sindhu's issue 6, plus one more. Every scan run here reported:
+
+```
+semgrep executable not found on PATH; install Semgrep to scan
+Agent 3 [Gemini Expert]: GEMINI_API_KEY not set; using fallback technical analysis.
+Agent 4 [Grok Advisor]: GROK_API_KEY not set; using fallback executive summary.
+```
+
+The Semgrep one is local to this Fedora box — `semgrep` is installed inside
+`backend/.venv` but was not on PATH because uvicorn was launched as
+`.venv/bin/uvicorn` without activating first. `source .venv/bin/activate` first
+and it is found. Not a code bug, but worth knowing it degrades **silently**:
+the scan still returns `status: "complete"` with Trivy-only findings, and
+`stats.by_source` was `{"trivy": 30}` with no semgrep key. Easy to mistake for
+a real result during the demo — check `by_source` has both before recording.
+
+The two API keys are **set** in `.env` — they were just never being read, and
+once they were, both turned out to be wrong. See the LLM blocker section above.
+
+### Full end-to-end run — PASSES (2026-07-26)
+
+Sindhu's issues 5 and 7. After the two fixes above, `./demo-app` from a cold
+start, both scanners on PATH:
+
+```
+POST /scan {"repo_url":"./demo-app"} -> 202 {"status":"complete"} in 34.7s
+
+raw -> dedup -> reported   55 -> 50 -> 30
+by_source                  {"trivy": 19, "semgrep": 11}
+by_severity                {"critical": 5, "high": 22, "medium": 3}
+risk.score                 92 (critical)
+risk.components            severity 90, exploitability 100, exposure 91,
+                           blast_radius 86
+attack_paths               5
+explanation non-null       30 / 30   (fallback prose — see LLM blocker)
+occurrences > 1            3 findings
+```
+
+Every stage in the chain is confirmed working: Trivy, Semgrep, normalization,
+dedup, ranking, scoring, attack-path generation, persistence and the API
+response. The `55 -> 50 -> 30` and score 92 match the numbers from the
+2026-07-25 run, so nothing regressed. **The only thing still fake is the LLM
+prose**, and that is a credentials problem, not a pipeline problem.
+
+Task 4, 5, 6 and 8 DoD conditions are all met by this run.
+
+### Note on file ownership (2026-07-26)
+
+CLAUDE.md says frontend sessions do not touch `/backend`. **Charvitha
+explicitly asked for the backend fixes to be done in the same session**, so
+`utils/validators.py`, `scanners/clone.py`, `core/grok.py` and `main.py` were
+edited from the frontend side. Flagging it here rather than leaving Sindhu to
+find it in a diff.
+
+Sindhu — two things to know before you pull:
+
+- A **second Claude Code session was running a backend on port 8000 on this
+  machine at the same time** and issuing its own scans. Early in this session a
+  `pkill -f "uvicorn main:app"` was run to clean up a test server; if your
+  backend died around 01:44 IST, that is why. Sorry.
+- `results/` picked up five throwaway scan documents from this debugging. It is
+  gitignored, so they will not follow the commit, but clear them before the
+  golden run so `results/golden.json` is unambiguous.
 
 ### Real integration gap — found running a live scan (2026-07-25) — RESOLVED, frontend side
 
