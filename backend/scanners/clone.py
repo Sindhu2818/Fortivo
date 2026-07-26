@@ -113,13 +113,45 @@ def _prepare_local_path(repo_url: str) -> CloneResult:
     )
 
 
-def _shallow_clone(repo_url: str) -> CloneResult:
+def shallow_clone(repo_url: str) -> CloneResult:
     parent = Path(tempfile.gettempdir())
     target = parent / f"fortivo-clone-{uuid.uuid4().hex}"
 
     try:
+        config = subprocess.run(
+            ["git", "config", "--list", "--show-origin"],
+            capture_output=True,
+            text=True,
+        )
+
+        print("===== GIT CONFIG =====")
+        print(config.stdout)
+        print(config.stderr)
+
+        version = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+        )
+
+        print("===== GIT VERSION =====")
+        print(version.stdout)
+
+        print("===== REPO URL =====")
+        print(repo_url)
+
         completed = subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, str(target)],
+            [
+                "git",
+                "-c", "credential.helper=",
+                "-c", "core.askPass=",
+                "-c", "http.extraHeader=",
+                "clone",
+                "--depth",
+                "1",
+                repo_url,
+                str(target),
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -129,19 +161,13 @@ def _shallow_clone(repo_url: str) -> CloneResult:
 
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
-        message = f"git clone failed (exit {completed.returncode})"
-        if detail:
-            message = f"{message}: {detail}"
-        if target.exists():
-            shutil.rmtree(target, ignore_errors=True)
-        raise CloneError(message)
+        raise CloneError(f"git clone failed (exit {completed.returncode}): {detail}")
 
     return CloneResult(
-        scan_path=str(target.resolve()),
+        scan_path=str(target),
         repo_name=derive_repo_name(repo_url),
         _cleanup_dir=target,
     )
-
 
 def prepare_repo(repo_url: str) -> CloneResult:
     """Return a scan directory and repo_name; call cleanup() when finished."""
@@ -150,5 +176,5 @@ def prepare_repo(repo_url: str) -> CloneResult:
         raise CloneError("repo_url is empty")
 
     if _is_git_url(stripped):
-        return _shallow_clone(stripped)
+        return shallow_clone(stripped)
     return _prepare_local_path(stripped)
